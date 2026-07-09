@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// A patient enrolled in one or more classes.
+// Appearance is built from three simple choices (skin tone, hair style, hair
+// color) rather than a fixed emoji set, so patients can make their avatar
+// look like them while staying anonymous to other patients.
+model Patient {
+  id        String   @id @default(cuid())
+  name      String
+  skinTone  String   @default("medium")
+  hairStyle String   @default("short")
+  hairColor String   @default("brown")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  classes  PatientClass[]
+  checkIns CheckIn[]
+}
+
+// The fixed weekly schedule, e.g. "Monday 16:00-17:00"
+// dayOfWeek: 0 = Sunday ... 6 = Saturday (JS convention)
+model ClassTemplate {
+  id        String   @id @default(cuid())
+  label     String
+  dayOfWeek Int
+  startTime String // "HH:MM" 24h
+  endTime   String // "HH:MM" 24h
+  createdAt DateTime @default(now())
+
+  patients PatientClass[]
+  sessions ClassSession[]
+}
+
+// Join table: which patients belong to which recurring class
+model PatientClass {
+  patientId       String
+  classTemplateId String
+
+  patient       Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  classTemplate ClassTemplate @relation(fields: [classTemplateId], references: [id], onDelete: Cascade)
+
+  @@id([patientId, classTemplateId])
+}
+
+// One real occurrence of a class on a specific date.
+// Created lazily the first time someone checks in for that date/template.
+model ClassSession {
+  id              String   @id @default(cuid())
+  classTemplateId String
+  date            String   // "YYYY-MM-DD" in Europe/Amsterdam local time, e.g. "2026-07-15"
+
+  classTemplate ClassTemplate @relation(fields: [classTemplateId], references: [id], onDelete: Cascade)
+  checkIns      CheckIn[]
+
+  @@unique([classTemplateId, date])
+}
+
+// A single check-in: this patient was present at this session
+model CheckIn {
+  id             String   @id @default(cuid())
+  patientId      String
+  classSessionId String
+  checkedInAt    DateTime @default(now())
+
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  classSession ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, classSessionId])
+}

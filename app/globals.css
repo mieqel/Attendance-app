@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Palette: calm clinical sage + deep teal + warm amber accent.
+     Deliberately not the cream/terracotta or near-black/neon combos —
+     this needs to read as a calm, trustworthy health-space, not a tech product. */
+  --bg: #eef3ef;
+  --surface: #ffffff;
+  --surface-muted: #e3ebe4;
+  --ink: #1f2a24;
+  --ink-muted: #5c6b63;
+  --teal: #2f6f62;
+  --teal-dark: #204c43;
+  --amber: #e8a33d;
+  --amber-dark: #c07f1f;
+  --border: #d7e1d8;
+  --danger: #b3452f;
+
+  --font-display: "Fredoka", sans-serif;
+  --font-body: "Inter", sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
+
+/* Visible keyboard focus everywhere, important for accessibility */
+:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
