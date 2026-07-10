@@ -3,12 +3,11 @@
 import { useState, useTransition, useEffect } from "react";
 import AvatarSvg from "./AvatarSvg";
 import { SKIN_TONES, HAIR_COLORS, HAIR_STYLES } from "@/lib/avatar";
-import { getInitials } from "@/lib/initials";
-import { checkInPatient, checkOutPatient, updatePatientAppearance, registerPatient } from "./actions/kiosk";
+import { checkInPatient, checkOutPatient, updatePatientAppearance, registerPatient, checkInDropIn } from "./actions/kiosk";
 
 type Patient = {
   id: string;
-  initials: string;
+  name: string;
   skinTone: string;
   hairStyle: string;
   hairColor: string;
@@ -18,14 +17,18 @@ type Patient = {
 export default function KioskClient({
   classLabel,
   patients: initialPatients,
+  otherPatients: initialOtherPatients,
 }: {
   classLabel: string;
   patients: Patient[];
+  otherPatients: Patient[];
 }) {
   const [patients, setPatients] = useState(initialPatients);
+  const [otherPatients, setOtherPatients] = useState(initialOtherPatients);
   const [toast, setToast] = useState<Patient | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
   const [registering, setRegistering] = useState(false);
+  const [droppingIn, setDroppingIn] = useState(false);
   const [undoTarget, setUndoTarget] = useState<Patient | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -43,6 +46,23 @@ export default function KioskClient({
       const res = await checkInPatient(p.id);
       if (!res.ok) {
         setPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, checkedIn: false } : x)));
+      }
+    });
+  }
+
+  // Checks someone in for a class they're not normally enrolled in. Moves
+  // them from the "other patients" pool into today's visible grid so the
+  // rest of the flow (undo, toast) works exactly the same as a regular tap.
+  function handleDropIn(p: Patient) {
+    setOtherPatients((prev) => prev.filter((x) => x.id !== p.id));
+    setPatients((prev) => [...prev, { ...p, checkedIn: true }]);
+    setDroppingIn(false);
+    setToast(p);
+    startTransition(async () => {
+      const res = await checkInDropIn(p.id);
+      if (!res.ok) {
+        setPatients((prev) => prev.filter((x) => x.id !== p.id));
+        setOtherPatients((prev) => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)));
       }
     });
   }
@@ -121,7 +141,7 @@ export default function KioskClient({
                   size={88}
                 />
                 <span className="font-display text-xl md:text-2xl font-semibold text-ink text-center">
-                  {p.initials}
+                  {p.name}
                 </span>
               </button>
             </div>
@@ -129,12 +149,18 @@ export default function KioskClient({
         </div>
       )}
 
-      <div className="flex justify-center mt-8">
+      <div className="flex flex-wrap justify-center gap-3 mt-8">
         <button
           onClick={() => setRegistering(true)}
           className="bg-surface-muted hover:bg-border rounded-2xl px-5 py-3 font-semibold text-ink-muted"
         >
           Nieuw hier? Voeg jezelf toe
+        </button>
+        <button
+          onClick={() => setDroppingIn(true)}
+          className="bg-surface-muted hover:bg-border rounded-2xl px-5 py-3 font-semibold text-ink-muted"
+        >
+          Sta je niet op de lijst? Check hier in
         </button>
       </div>
 
@@ -148,7 +174,7 @@ export default function KioskClient({
               seed={toast.id}
               size={48}
             />
-            <p className="font-display text-lg font-semibold">Leuk dat je er bent, {toast.initials}!</p>
+            <p className="font-display text-lg font-semibold">Leuk dat je er bent, {toast.name}!</p>
           </div>
         </div>
       )}
@@ -210,7 +236,68 @@ export default function KioskClient({
           }}
         />
       )}
+
+      {droppingIn && (
+        <DropInModal
+          patients={otherPatients}
+          onCancel={() => setDroppingIn(false)}
+          onPick={handleDropIn}
+        />
+      )}
     </main>
+  );
+}
+
+function DropInModal({
+  patients,
+  onCancel,
+  onPick,
+}: {
+  patients: Patient[];
+  onCancel: () => void;
+  onPick: (p: Patient) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filtered = patients.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <div className="fixed inset-0 bg-ink/40 flex items-center justify-center p-4 z-50" onClick={onCancel}>
+      <div
+        className="bg-surface rounded-3xl p-6 flex flex-col gap-4 max-w-md w-full shadow-xl max-h-[80vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="font-display text-2xl font-semibold text-ink text-center">Wie ben je?</h2>
+        <p className="text-sm text-ink-muted text-center -mt-2">
+          Je staat niet op de vaste lijst voor deze les, maar je check-in telt gewoon mee.
+        </p>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Zoek je naam..."
+          autoFocus
+          className="w-full border-2 border-border rounded-xl px-4 py-3 text-lg text-center focus:border-teal outline-none"
+        />
+        <div className="overflow-y-auto flex flex-col gap-2">
+          {filtered.length === 0 ? (
+            <p className="text-center text-ink-muted py-4">Niemand gevonden.</p>
+          ) : (
+            filtered.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => onPick(p)}
+                className="flex items-center gap-3 rounded-2xl border-2 border-border hover:border-teal px-4 py-2 text-left"
+              >
+                <AvatarSvg skinTone={p.skinTone} hairStyle={p.hairStyle} hairColor={p.hairColor} seed={p.id} size={44} />
+                <span className="font-display text-lg font-semibold text-ink">{p.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+        <button onClick={onCancel} className="w-full py-3 rounded-2xl font-semibold bg-surface-muted hover:bg-border">
+          Annuleren
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -373,7 +460,7 @@ function RegisterModal({ onCancel, onDone }: { onCancel: () => void; onDone: () 
           className="w-full border-2 border-border rounded-xl px-4 py-3 text-lg text-center focus:border-teal outline-none"
         />
         <p className="text-xs text-ink-muted -mt-3 text-center">
-          Alleen je trainer ziet je volledige naam. Op dit scherm zie je straks alleen je initialen.
+          Je naam is voortaan zichtbaar op dit scherm, zodat je jezelf makkelijk terugvindt.
         </p>
         <AppearancePicker
           skinTone={skinTone}

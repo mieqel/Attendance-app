@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentClass, getAmsterdamDateKey, formatWait } from "@/lib/currentClass";
 import { DAY_NAMES_NL } from "@/lib/schedule";
-import { getInitials } from "@/lib/initials";
 import KioskClient from "./KioskClient";
 
 export const dynamic = "force-dynamic"; // always compute against the real current time
@@ -64,6 +63,7 @@ export default async function KioskPage() {
   });
 
   const checkedInIds = new Set((session?.checkIns ?? []).map((c) => c.patientId));
+  const enrolledIds = new Set(template.patients.map((pc) => pc.patientId));
 
   const patients = template.patients
     .map((pc) => pc.patient)
@@ -71,12 +71,27 @@ export default async function KioskPage() {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((p) => ({
       id: p.id,
-      initials: getInitials(p.name),
+      name: p.name,
       skinTone: p.skinTone,
       hairStyle: p.hairStyle,
       hairColor: p.hairColor,
       checkedIn: checkedInIds.has(p.id),
     }));
 
-  return <KioskClient classLabel={active.label} patients={patients} />;
+  // Everyone else who is active but not enrolled in *this* class — the pool
+  // for "drop in just for today". Their attendance still counts toward their
+  // total, but they don't get added to this class's regular roster.
+  const otherPatients = (await prisma.patient.findMany({ where: { active: true } }))
+    .filter((p) => !enrolledIds.has(p.id))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      skinTone: p.skinTone,
+      hairStyle: p.hairStyle,
+      hairColor: p.hairColor,
+      checkedIn: checkedInIds.has(p.id),
+    }));
+
+  return <KioskClient classLabel={active.label} patients={patients} otherPatients={otherPatients} />;
 }

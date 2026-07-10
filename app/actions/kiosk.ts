@@ -115,6 +115,64 @@ export async function checkOutPatient(patientId: string) {
   return { ok: true };
 }
 
+// Checks in someone for a class they are NOT normally enrolled in — a
+// one-off drop-in (e.g. filling in for a missed session elsewhere). This
+// intentionally skips the PatientClass "belongs" check that checkInPatient
+// enforces. No PatientClass row is created, so their regular schedule is
+// untouched, but the CheckIn is real and counts toward their attendance
+// totals just like any other check-in.
+export async function checkInDropIn(patientId: string) {
+  const { active } = getCurrentClass();
+  if (!active) {
+    return { ok: false, error: "Er is nu geen les. Vraag je trainer om hulp." };
+  }
+
+  const template = await prisma.classTemplate.findFirst({
+    where: {
+      dayOfWeek: active.dayOfWeek,
+      startTime: active.startTime,
+      endTime: active.endTime,
+    },
+  });
+
+  if (!template) {
+    return { ok: false, error: "Les niet gevonden. Vraag je trainer om hulp." };
+  }
+
+  const dateKey = getAmsterdamDateKey();
+
+  const session = await prisma.classSession.upsert({
+    where: {
+      classTemplateId_date: {
+        classTemplateId: template.id,
+        date: dateKey,
+      },
+    },
+    update: {},
+    create: {
+      classTemplateId: template.id,
+      date: dateKey,
+    },
+  });
+
+  await prisma.checkIn.upsert({
+    where: {
+      patientId_classSessionId: {
+        patientId,
+        classSessionId: session.id,
+      },
+    },
+    update: {},
+    create: {
+      patientId,
+      classSessionId: session.id,
+    },
+  });
+
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export async function updatePatientAppearance(
   patientId: string,
   skinTone: string,
