@@ -1,4 +1,5 @@
-import { SCHEDULE, ScheduleEntry, DAY_NAMES_NL } from "./schedule";
+import { prisma } from "./prisma";
+import { DAY_NAMES_NL } from "./schedule";
 import { getAmsterdamNow, AmsterdamNow } from "./time";
 
 function toMinutes(hhmm: string): number {
@@ -6,18 +7,28 @@ function toMinutes(hhmm: string): number {
   return h * 60 + m;
 }
 
-export type CurrentClassResult = {
-  active: ScheduleEntry | null;
-  next: { entry: ScheduleEntry; inMinutes: number; dayOfWeek: number } | null;
+export type ClassEntry = {
+  id: string;
+  label: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
 };
 
-// Determine which scheduled class (if any) is happening right now in Amsterdam time,
-// and if none, when the next one starts.
-export function getCurrentClass(reference: Date = new Date()): CurrentClassResult {
+export type CurrentClassResult = {
+  active: ClassEntry | null;
+  next: { entry: ClassEntry; inMinutes: number; dayOfWeek: number } | null;
+};
+
+// Determine which class (if any) is happening right now in Amsterdam time,
+// and if none, when the next one starts. Reads live from the database,
+// so editing classes in /admin/classes takes effect immediately — no redeploy.
+export async function getCurrentClass(reference: Date = new Date()): Promise<CurrentClassResult> {
   const nowInfo: AmsterdamNow = getAmsterdamNow(reference);
   const { dayOfWeek, minutesSinceMidnight } = nowInfo;
+  const allClasses = await prisma.classTemplate.findMany();
 
-  const active = SCHEDULE.find(
+  const active = allClasses.find(
     (e) =>
       e.dayOfWeek === dayOfWeek &&
       toMinutes(e.startTime) <= minutesSinceMidnight &&
@@ -30,9 +41,9 @@ export function getCurrentClass(reference: Date = new Date()): CurrentClassResul
 
   for (let offset = 0; offset <= 7; offset++) {
     const d = (dayOfWeek + offset) % 7;
-    const candidates = SCHEDULE.filter((e) => e.dayOfWeek === d).sort(
-      (a, b) => toMinutes(a.startTime) - toMinutes(b.startTime)
-    );
+    const candidates = allClasses
+      .filter((e) => e.dayOfWeek === d)
+      .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
     for (const c of candidates) {
       const startMinutes = toMinutes(c.startTime);
       if (offset === 0 && startMinutes <= minutesSinceMidnight) continue;

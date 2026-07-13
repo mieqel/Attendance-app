@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import AvatarSvg from "../../../AvatarSvg";
 import { SKIN_TONES, HAIR_COLORS, HAIR_STYLES } from "@/lib/avatar";
+import { ATTENDANCE_ALERT_DAYS } from "@/lib/attendance";
 import {
   createPatient,
   updatePatient,
@@ -21,6 +22,7 @@ type Patient = {
   classTemplateIds: string[];
   checkInsThisWeek: number;
   checkInsThisMonth: number;
+  daysSinceLastCheckIn: number | null;
 };
 
 type ClassTemplate = { id: string; label: string };
@@ -229,45 +231,53 @@ export default function PatientsManager({
       )}
 
       <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
-        {patients.map((p) => (
-          <div key={p.id} className="flex items-center justify-between px-5 py-3 gap-3">
-            <div className="flex items-center gap-3">
-              <AvatarSvg skinTone={p.skinTone} hairStyle={p.hairStyle} hairColor={p.hairColor} seed={p.id} size={40} />
-              <div>
-                <Link href={`/admin/patients/${p.id}`} className="font-semibold text-ink hover:text-teal">
-                  {p.name}
-                </Link>
-                <p className="text-xs text-ink-muted">
-                  {p.classTemplateIds.length} {p.classTemplateIds.length === 1 ? "les" : "lessen"}
-                  {!p.active && " · inactief"}
-                </p>
+        {patients.map((p) => {
+          const overdue = p.daysSinceLastCheckIn !== null && p.daysSinceLastCheckIn > ATTENDANCE_ALERT_DAYS;
+          return (
+            <div key={p.id} className="flex items-center justify-between px-5 py-3 gap-3">
+              <div className="flex items-center gap-3">
+                <AvatarSvg skinTone={p.skinTone} hairStyle={p.hairStyle} hairColor={p.hairColor} seed={p.id} size={40} />
+                <div>
+                  <Link
+                    href={`/admin/patients/${p.id}`}
+                    className={`font-semibold hover:text-teal ${overdue ? "text-danger" : "text-ink"}`}
+                  >
+                    {p.name}
+                  </Link>
+                  <p className={`text-xs ${overdue ? "text-danger font-medium" : "text-ink-muted"}`}>
+                    {overdue
+                      ? `Niet geweest sinds ${p.daysSinceLastCheckIn} dagen`
+                      : `${p.classTemplateIds.length} ${p.classTemplateIds.length === 1 ? "les" : "lessen"}`}
+                    {!p.active && " · inactief"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <div className="text-right mr-2">
+                  <p className="font-display text-lg font-semibold text-teal-dark leading-none">
+                    {p.checkInsThisWeek}
+                  </p>
+                  <p className="text-[10px] text-ink-muted uppercase tracking-wide">deze week</p>
+                </div>
+                <div className="text-right mr-2">
+                  <p className="font-display text-lg font-semibold text-teal-dark leading-none">
+                    {p.checkInsThisMonth}
+                  </p>
+                  <p className="text-[10px] text-ink-muted uppercase tracking-wide">deze maand</p>
+                </div>
+                <button onClick={() => startEdit(p)} className="text-ink-muted hover:text-teal font-medium">
+                  Bewerken
+                </button>
+                <button onClick={() => toggleActive(p)} className="text-ink-muted hover:text-amber-dark font-medium">
+                  {p.active ? "Deactiveren" : "Activeren"}
+                </button>
+                <button onClick={() => remove(p.id)} className="text-ink-muted hover:text-danger font-medium">
+                  Verwijderen
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <div className="text-right mr-2">
-                <p className="font-display text-lg font-semibold text-teal-dark leading-none">
-                  {p.checkInsThisWeek}
-                </p>
-                <p className="text-[10px] text-ink-muted uppercase tracking-wide">deze week</p>
-              </div>
-              <div className="text-right mr-2">
-                <p className="font-display text-lg font-semibold text-teal-dark leading-none">
-                  {p.checkInsThisMonth}
-                </p>
-                <p className="text-[10px] text-ink-muted uppercase tracking-wide">deze maand</p>
-              </div>
-              <button onClick={() => startEdit(p)} className="text-ink-muted hover:text-teal font-medium">
-                Bewerken
-              </button>
-              <button onClick={() => toggleActive(p)} className="text-ink-muted hover:text-amber-dark font-medium">
-                {p.active ? "Deactiveren" : "Activeren"}
-              </button>
-              <button onClick={() => remove(p.id)} className="text-ink-muted hover:text-danger font-medium">
-                Verwijderen
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {patients.length === 0 && <p className="p-6 text-ink-muted">Nog geen cliënten toegevoegd.</p>}
       </div>
     </div>

@@ -24,6 +24,9 @@ export default async function ProtectedAdminLayout({
           <Link href="/admin/patients" className="text-ink-muted hover:text-teal font-medium">
             Cliënten
           </Link>
+          <Link href="/admin/classes" className="text-ink-muted hover:text-teal font-medium">
+            Lessen
+          </Link>
         </div>
         <form action={logout}>
           <button className="text-ink-muted hover:text-danger font-medium" type="submit">

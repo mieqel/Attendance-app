@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { startOfAmsterdamWeek, startOfAmsterdamMonth, getAmsterdamMonthKey } from "@/lib/currentClass";
 import { getLastNMonths } from "@/lib/monthGrid";
+import { ATTENDANCE_ALERT_DAYS, daysSince } from "@/lib/attendance";
 import AvatarSvg from "../../../../AvatarSvg";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,6 +23,10 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
   });
 
   if (!patient) notFound();
+
+  const lastCheckIn = patient.checkIns[0]?.checkedInAt ?? null;
+  const gap = lastCheckIn ? daysSince(lastCheckIn) : null;
+  const overdue = gap !== null && gap > ATTENDANCE_ALERT_DAYS;
 
   const monthCounts = new Map<string, number>();
   for (const c of patient.checkIns) {
@@ -45,6 +50,17 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
           </p>
         </div>
       </div>
+
+      {overdue && lastCheckIn && (
+        <div
+          className="border-2 border-danger text-danger rounded-2xl px-4 py-3 font-semibold"
+          style={{ backgroundColor: "rgba(179, 69, 47, 0.08)" }}
+        >
+          Niet meer geweest sinds{" "}
+          {lastCheckIn.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })} ({gap} dagen
+          geleden)
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-surface border border-border rounded-2xl p-4">

@@ -1,30 +1,30 @@
 import { prisma } from "@/lib/prisma";
 import { getAmsterdamNow } from "@/lib/time";
 import { getAmsterdamDateKey } from "@/lib/currentClass";
-import { SCHEDULE, DAY_NAMES_NL } from "@/lib/schedule";
+import { DAY_NAMES_NL } from "@/lib/schedule";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
   const { dayOfWeek } = getAmsterdamNow();
   const dateKey = getAmsterdamDateKey();
-  const todaysClasses = SCHEDULE.filter((s) => s.dayOfWeek === dayOfWeek);
 
   const totalPatients = await prisma.patient.count({ where: { active: true } });
 
+  const todaysClasses = await prisma.classTemplate.findMany({
+    where: { dayOfWeek },
+    include: { patients: true },
+    orderBy: { startTime: "asc" },
+  });
+
   const rows = await Promise.all(
-    todaysClasses.map(async (entry) => {
-      const template = await prisma.classTemplate.findFirst({
-        where: { dayOfWeek: entry.dayOfWeek, startTime: entry.startTime, endTime: entry.endTime },
-        include: { patients: true },
-      });
-      if (!template) return { entry, enrolled: 0, checkedIn: 0 };
+    todaysClasses.map(async (template) => {
       const session = await prisma.classSession.findUnique({
         where: { classTemplateId_date: { classTemplateId: template.id, date: dateKey } },
         include: { checkIns: true },
       });
       return {
-        entry,
+        entry: template,
         enrolled: template.patients.length,
         checkedIn: session?.checkIns.length ?? 0,
       };

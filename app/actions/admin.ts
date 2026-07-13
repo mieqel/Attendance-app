@@ -95,3 +95,41 @@ export async function deletePatient(patientId: string) {
   revalidatePath("/admin/patients");
   return { ok: true };
 }
+
+export async function createClass(label: string, dayOfWeek: number, startTime: string, endTime: string) {
+  await requireAdmin();
+  if (!label.trim()) {
+    return { ok: false, error: "Naam is verplicht." };
+  }
+  await prisma.classTemplate.create({
+    data: { label: label.trim(), dayOfWeek, startTime, endTime },
+  });
+  revalidatePath("/admin/classes");
+  return { ok: true };
+}
+
+export async function updateClass(
+  id: string,
+  label: string,
+  dayOfWeek: number,
+  startTime: string,
+  endTime: string
+) {
+  await requireAdmin();
+  if (!label.trim()) {
+    return { ok: false, error: "Naam is verplicht." };
+  }
+  await prisma.classTemplate.update({
+    where: { id },
+    data: { label: label.trim(), dayOfWeek, startTime, endTime },
+  });
+  revalidatePath("/admin/classes");
+  return { ok: true };
+}
+
+export async function deleteClass(id: string) {
+  await requireAdmin();
+  await prisma.classTemplate.delete({ where: { id } });
+  revalidatePath("/admin/classes");
+  return { ok: true };
+}

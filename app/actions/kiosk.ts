@@ -10,28 +10,16 @@ import { revalidatePath } from "next/cache";
 // A single tap on their avatar is all it takes — this is intentionally the
 // entire interaction, no confirmation step.
 export async function checkInPatient(patientId: string) {
-  const { active } = getCurrentClass();
+  const { active } = await getCurrentClass();
   if (!active) {
     return { ok: false, error: "Er is nu geen les. Vraag je trainer om hulp." };
-  }
-
-  const template = await prisma.classTemplate.findFirst({
-    where: {
-      dayOfWeek: active.dayOfWeek,
-      startTime: active.startTime,
-      endTime: active.endTime,
-    },
-  });
-
-  if (!template) {
-    return { ok: false, error: "Les niet gevonden. Vraag je trainer om hulp." };
   }
 
   const belongs = await prisma.patientClass.findUnique({
     where: {
       patientId_classTemplateId: {
         patientId,
-        classTemplateId: template.id,
+        classTemplateId: active.id,
       },
     },
   });
@@ -45,13 +33,13 @@ export async function checkInPatient(patientId: string) {
   const session = await prisma.classSession.upsert({
     where: {
       classTemplateId_date: {
-        classTemplateId: template.id,
+        classTemplateId: active.id,
         date: dateKey,
       },
     },
     update: {},
     create: {
-      classTemplateId: template.id,
+      classTemplateId: active.id,
       date: dateKey,
     },
   });
@@ -78,27 +66,16 @@ export async function checkInPatient(patientId: string) {
 // so this needs to be just as easy as checking in — same class/session lookup,
 // just deletes instead of creates.
 export async function checkOutPatient(patientId: string) {
-  const { active } = getCurrentClass();
+  const { active } = await getCurrentClass();
   if (!active) {
     return { ok: false, error: "Er is nu geen les." };
-  }
-
-  const template = await prisma.classTemplate.findFirst({
-    where: {
-      dayOfWeek: active.dayOfWeek,
-      startTime: active.startTime,
-      endTime: active.endTime,
-    },
-  });
-  if (!template) {
-    return { ok: false, error: "Les niet gevonden." };
   }
 
   const dateKey = getAmsterdamDateKey();
   const session = await prisma.classSession.findUnique({
     where: {
       classTemplateId_date: {
-        classTemplateId: template.id,
+        classTemplateId: active.id,
         date: dateKey,
       },
     },
@@ -122,21 +99,9 @@ export async function checkOutPatient(patientId: string) {
 // untouched, but the CheckIn is real and counts toward their attendance
 // totals just like any other check-in.
 export async function checkInDropIn(patientId: string) {
-  const { active } = getCurrentClass();
+  const { active } = await getCurrentClass();
   if (!active) {
     return { ok: false, error: "Er is nu geen les. Vraag je trainer om hulp." };
-  }
-
-  const template = await prisma.classTemplate.findFirst({
-    where: {
-      dayOfWeek: active.dayOfWeek,
-      startTime: active.startTime,
-      endTime: active.endTime,
-    },
-  });
-
-  if (!template) {
-    return { ok: false, error: "Les niet gevonden. Vraag je trainer om hulp." };
   }
 
   const dateKey = getAmsterdamDateKey();
@@ -144,13 +109,13 @@ export async function checkInDropIn(patientId: string) {
   const session = await prisma.classSession.upsert({
     where: {
       classTemplateId_date: {
-        classTemplateId: template.id,
+        classTemplateId: active.id,
         date: dateKey,
       },
     },
     update: {},
     create: {
-      classTemplateId: template.id,
+      classTemplateId: active.id,
       date: dateKey,
     },
   });
@@ -212,20 +177,9 @@ export async function registerPatient(
     return { ok: false, error: "Ongeldige keuze." };
   }
 
-  const { active } = getCurrentClass();
+  const { active } = await getCurrentClass();
   if (!active) {
     return { ok: false, error: "Er is nu geen les." };
-  }
-
-  const template = await prisma.classTemplate.findFirst({
-    where: {
-      dayOfWeek: active.dayOfWeek,
-      startTime: active.startTime,
-      endTime: active.endTime,
-    },
-  });
-  if (!template) {
-    return { ok: false, error: "Les niet gevonden. Vraag je trainer om hulp." };
   }
 
   const patient = await prisma.patient.create({
@@ -234,7 +188,7 @@ export async function registerPatient(
       skinTone,
       hairStyle,
       hairColor,
-      classes: { create: [{ classTemplateId: template.id }] },
+      classes: { create: [{ classTemplateId: active.id }] },
     },
   });
 
@@ -242,13 +196,13 @@ export async function registerPatient(
   const session = await prisma.classSession.upsert({
     where: {
       classTemplateId_date: {
-        classTemplateId: template.id,
+        classTemplateId: active.id,
         date: dateKey,
       },
     },
     update: {},
     create: {
-      classTemplateId: template.id,
+      classTemplateId: active.id,
       date: dateKey,
     },
   });

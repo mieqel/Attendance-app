@@ -6,7 +6,7 @@ import KioskClient from "./KioskClient";
 export const dynamic = "force-dynamic"; // always compute against the real current time
 
 export default async function KioskPage() {
-  const { active, next } = getCurrentClass();
+  const { active, next } = await getCurrentClass();
 
   if (!active) {
     return (
@@ -28,12 +28,8 @@ export default async function KioskPage() {
     );
   }
 
-  const template = await prisma.classTemplate.findFirst({
-    where: {
-      dayOfWeek: active.dayOfWeek,
-      startTime: active.startTime,
-      endTime: active.endTime,
-    },
+  const template = await prisma.classTemplate.findUnique({
+    where: { id: active.id },
     include: {
       patients: {
         include: { patient: true },
