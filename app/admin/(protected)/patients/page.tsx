@@ -33,7 +33,7 @@ export default async function PatientsPage() {
       skinTone: p.skinTone,
       hairStyle: p.hairStyle,
       hairColor: p.hairColor,
-      active: p.active,
+      status: p.status,
       classTemplateIds: p.classes.map((c) => c.classTemplateId),
       checkInsThisWeek: p.checkIns.filter((c) => c.checkedInAt >= weekStart).length,
       checkInsThisMonth: p.checkIns.filter((c) => c.checkedInAt >= monthStart).length,

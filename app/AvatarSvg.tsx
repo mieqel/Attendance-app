@@ -32,13 +32,6 @@ export default function AvatarSvg({
       <g clipPath={`url(#${clipId})`}>
         <circle cx="50" cy="50" r="50" fill="#EEF3EF" />
 
-        {hairStyle === "long" && (
-          <path
-            d="M20 46 Q20 96 30 102 L30 60 Q30 40 50 38 Q70 40 70 60 L70 102 Q80 96 80 46 Z"
-            fill={hair}
-          />
-        )}
-
         {/* shoulders */}
         <path d="M10 102 Q50 62 90 102 Z" fill={shirt} />
 
@@ -52,24 +45,41 @@ export default function AvatarSvg({
         {/* head */}
         <circle cx="50" cy="40" r="22" fill={skin} />
 
+        {hairStyle === "receding" && (
+          <g fill={hair}>
+            <path d="M27 27 Q23 30 23 40 Q23 49 28 50 Q25 43 26 35 Q26 30 29 27 Q28 26 27 27 Z" />
+            <path d="M73 27 Q77 30 77 40 Q77 49 72 50 Q75 43 74 35 Q74 30 71 27 Q72 26 73 27 Z" />
+          </g>
+        )}
+
         {hairStyle === "short" && (
-          <path d="M27 34 Q27 15 50 15 Q73 15 73 34 Q73 23 50 23 Q27 23 27 34 Z" fill={hair} />
+          <path d="M27 33 Q27 16 50 16 Q73 16 73 33 Q73 24 50 24 Q27 24 27 33 Z" fill={hair} />
+        )}
+
+        {hairStyle === "long" && (
+          <>
+            <path d="M27 33 Q27 16 50 16 Q73 16 73 33 Q73 24 50 24 Q27 24 27 33 Z" fill={hair} />
+            <path d="M26 34 Q21 56 25 82 Q29 89 36 85 Q32 62 33 40 Z" fill={hair} />
+            <path d="M74 34 Q79 56 75 82 Q71 89 64 85 Q68 62 67 40 Z" fill={hair} />
+          </>
         )}
 
         {hairStyle === "bun" && (
           <>
-            <path d="M27 34 Q27 16 50 16 Q73 16 73 34 Q73 24 50 24 Q27 24 27 34 Z" fill={hair} />
-            <circle cx="50" cy="11" r="7" fill={hair} />
+            <path d="M27 32 Q27 18 50 18 Q73 18 73 32 Q73 25 50 25 Q27 25 27 32 Z" fill={hair} />
+            <circle cx="50" cy="10" r="7" fill={hair} />
           </>
         )}
 
         {hairStyle === "curly" && (
           <g fill={hair}>
-            <circle cx="30" cy="25" r="8" />
-            <circle cx="42" cy="16" r="9" />
-            <circle cx="58" cy="16" r="9" />
-            <circle cx="70" cy="25" r="8" />
-            <circle cx="50" cy="14" r="9" />
+            <circle cx="28" cy="31" r="7" />
+            <circle cx="34" cy="20" r="8" />
+            <circle cx="44" cy="14" r="8" />
+            <circle cx="56" cy="14" r="8" />
+            <circle cx="66" cy="20" r="8" />
+            <circle cx="72" cy="31" r="7" />
+            <circle cx="50" cy="15" r="8" />
           </g>
         )}
 

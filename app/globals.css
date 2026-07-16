@@ -3,20 +3,20 @@
 @tailwind utilities;
 
 :root {
-  /* Palette: calm clinical sage + deep teal + warm amber accent.
-     Deliberately not the cream/terracotta or near-black/neon combos —
-     this needs to read as a calm, trustworthy health-space, not a tech product. */
-  --bg: #eef3ef;
+  /* Palette: matches Fysiotherapie Meerzicht's own brand colors —
+     red, yellow, and white. --teal/--amber names are kept as-is so no
+     component code needs renaming; only the hex values changed. */
+  --bg: #faf9f7;
   --surface: #ffffff;
-  --surface-muted: #e3ebe4;
-  --ink: #1f2a24;
-  --ink-muted: #5c6b63;
-  --teal: #2f6f62;
-  --teal-dark: #204c43;
-  --amber: #e8a33d;
-  --amber-dark: #c07f1f;
-  --border: #d7e1d8;
-  --danger: #b3452f;
+  --surface-muted: #f3ede9;
+  --ink: #241012;
+  --ink-muted: #7a6a6c;
+  --teal: #bf1e2e;
+  --teal-dark: #8f1620;
+  --amber: #f8c944;
+  --amber-dark: #a9860a;
+  --border: #ecdfdd;
+  --danger: #8f1620;
 
   --font-display: "Fredoka", sans-serif;
   --font-body: "Inter", sans-serif;

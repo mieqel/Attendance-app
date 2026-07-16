@@ -63,7 +63,7 @@ export default async function KioskPage() {
 
   const patients = template.patients
     .map((pc) => pc.patient)
-    .filter((p) => p.active)
+    .filter((p) => p.status !== "inactief")
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((p) => ({
       id: p.id,
@@ -74,10 +74,10 @@ export default async function KioskPage() {
       checkedIn: checkedInIds.has(p.id),
     }));
 
-  // Everyone else who is active but not enrolled in *this* class — the pool
-  // for "drop in just for today". Their attendance still counts toward their
-  // total, but they don't get added to this class's regular roster.
-  const otherPatients = (await prisma.patient.findMany({ where: { active: true } }))
+  // Everyone else who isn't inactief and not enrolled in *this* class — the
+  // pool for "drop in just for today". Their attendance still counts toward
+  // their total, but they don't get added to this class's regular roster.
+  const otherPatients = (await prisma.patient.findMany({ where: { status: { not: "inactief" } } }))
     .filter((p) => !enrolledIds.has(p.id))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((p) => ({

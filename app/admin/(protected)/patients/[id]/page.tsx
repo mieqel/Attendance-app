@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { startOfAmsterdamWeek, startOfAmsterdamMonth, getAmsterdamMonthKey } from "@/lib/currentClass";
 import { getLastNMonths } from "@/lib/monthGrid";
-import { ATTENDANCE_ALERT_DAYS, daysSince } from "@/lib/attendance";
+import { isOverdue, daysSince } from "@/lib/attendance";
 import AvatarSvg from "../../../../AvatarSvg";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AddPastCheckIn, RemoveCheckInButton } from "./ManualCheckIn";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,13 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
 
   if (!patient) notFound();
 
+  const allClasses = await prisma.classTemplate.findMany({
+    orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+  });
+
   const lastCheckIn = patient.checkIns[0]?.checkedInAt ?? null;
   const gap = lastCheckIn ? daysSince(lastCheckIn) : null;
-  const overdue = gap !== null && gap > ATTENDANCE_ALERT_DAYS;
+  const overdue = isOverdue(gap, patient.status);
 
   const monthCounts = new Map<string, number>();
   for (const c of patient.checkIns) {
@@ -108,8 +113,11 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
         </div>
       </div>
 
-      <div>
-        <h2 className="font-display text-xl font-semibold text-ink mb-3">Geschiedenis</h2>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-xl font-semibold text-ink">Geschiedenis</h2>
+          <AddPastCheckIn patientId={patient.id} classes={allClasses} />
+        </div>
         <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
           {patient.checkIns.length === 0 ? (
             <p className="p-6 text-ink-muted">Nog geen check-ins.</p>
@@ -120,9 +128,12 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
                   <p className="font-medium text-ink">{c.classSession.classTemplate.label}</p>
                   <p className="text-sm text-ink-muted">{c.classSession.date}</p>
                 </div>
-                <span className="text-xl" aria-label="Ingecheckt">
-                  ✅
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xl" aria-label="Ingecheckt">
+                    ✅
+                  </span>
+                  <RemoveCheckInButton checkInId={c.id} patientId={patient.id} />
+                </div>
               </div>
             ))
           )}

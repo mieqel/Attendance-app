@@ -34,7 +34,8 @@ export async function createPatient(
   skinTone: string,
   hairStyle: string,
   hairColor: string,
-  classTemplateIds: string[]
+  classTemplateIds: string[],
+  status: string = "actief"
 ) {
   await requireAdmin();
   if (!name.trim()) {
@@ -46,6 +47,8 @@ export async function createPatient(
       skinTone,
       hairStyle,
       hairColor,
+      status,
+      active: status !== "inactief",
       classes: {
         create: classTemplateIds.map((id) => ({ classTemplateId: id })),
       },
@@ -61,7 +64,8 @@ export async function updatePatient(
   skinTone: string,
   hairStyle: string,
   hairColor: string,
-  classTemplateIds: string[]
+  classTemplateIds: string[],
+  status: string = "actief"
 ) {
   await requireAdmin();
   if (!name.trim()) {
@@ -70,7 +74,7 @@ export async function updatePatient(
   await prisma.$transaction([
     prisma.patient.update({
       where: { id: patientId },
-      data: { name: name.trim(), skinTone, hairStyle, hairColor },
+      data: { name: name.trim(), skinTone, hairStyle, hairColor, status, active: status !== "inactief" },
     }),
     prisma.patientClass.deleteMany({ where: { patientId } }),
     prisma.patientClass.createMany({
@@ -82,9 +86,16 @@ export async function updatePatient(
   return { ok: true };
 }
 
-export async function togglePatientActive(patientId: string, active: boolean) {
+// Replaces the old active/inactive-only toggle with a three-way status.
+export async function setPatientStatus(patientId: string, status: string) {
   await requireAdmin();
-  await prisma.patient.update({ where: { id: patientId }, data: { active } });
+  if (!["actief", "pauze", "inactief"].includes(status)) {
+    return { ok: false, error: "Ongeldige status." };
+  }
+  await prisma.patient.update({
+    where: { id: patientId },
+    data: { status, active: status !== "inactief" },
+  });
   revalidatePath("/admin/patients");
   return { ok: true };
 }
@@ -93,6 +104,49 @@ export async function deletePatient(patientId: string) {
   await requireAdmin();
   await prisma.patient.delete({ where: { id: patientId } });
   revalidatePath("/admin/patients");
+  return { ok: true };
+}
+
+// Lets an admin backfill check-ins for one or more dates that already
+// happened — e.g. a patient was actually there but the tablet was missed
+// across several sessions. Reuses the same upsert pattern as the kiosk
+// check-in so manual entries are indistinguishable from real ones.
+export async function addManualCheckIn(patientId: string, classTemplateId: string, dates: string[]) {
+  await requireAdmin();
+  const validDates = dates.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+  if (validDates.length === 0) {
+    return { ok: false, error: "Kies minstens één geldige datum." };
+  }
+
+  for (const date of validDates) {
+    const session = await prisma.classSession.upsert({
+      where: {
+        classTemplateId_date: { classTemplateId, date },
+      },
+      update: {},
+      create: { classTemplateId, date },
+    });
+
+    await prisma.checkIn.upsert({
+      where: {
+        patientId_classSessionId: { patientId, classSessionId: session.id },
+      },
+      update: {},
+      create: { patientId, classSessionId: session.id },
+    });
+  }
+
+  revalidatePath(`/admin/patients/${patientId}`);
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+// Undo a check-in (manual or real) — for correcting mistakes after the fact.
+export async function removeCheckIn(checkInId: string, patientId: string) {
+  await requireAdmin();
+  await prisma.checkIn.delete({ where: { id: checkInId } });
+  revalidatePath(`/admin/patients/${patientId}`);
+  revalidatePath("/admin");
   return { ok: true };
 }
 

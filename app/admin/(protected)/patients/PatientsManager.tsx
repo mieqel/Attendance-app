@@ -4,12 +4,12 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import AvatarSvg from "../../../AvatarSvg";
 import { SKIN_TONES, HAIR_COLORS, HAIR_STYLES } from "@/lib/avatar";
-import { ATTENDANCE_ALERT_DAYS } from "@/lib/attendance";
+import { isOverdue } from "@/lib/attendance";
 import {
   createPatient,
   updatePatient,
   deletePatient,
-  togglePatientActive,
+  setPatientStatus,
 } from "../../../actions/admin";
 
 type Patient = {
@@ -18,11 +18,17 @@ type Patient = {
   skinTone: string;
   hairStyle: string;
   hairColor: string;
-  active: boolean;
+  status: string;
   classTemplateIds: string[];
   checkInsThisWeek: number;
   checkInsThisMonth: number;
   daysSinceLastCheckIn: number | null;
+};
+
+const STATUS_STYLES: Record<string, { text: string; bg: string; label: string }> = {
+  actief: { text: "#1f6d3f", bg: "#e5f3ea", label: "Actief" },
+  pauze: { text: "#8a6d0a", bg: "#fdf3d8", label: "Op pauze" },
+  inactief: { text: "#8f1620", bg: "#fbe4e5", label: "Inactief" },
 };
 
 type ClassTemplate = { id: string; label: string };
@@ -34,6 +40,7 @@ const EMPTY_FORM = {
   hairStyle: HAIR_STYLES[1].key as string,
   hairColor: HAIR_COLORS[1].key as string,
   classIds: [] as string[],
+  status: "actief" as string,
 };
 
 export default function PatientsManager({
@@ -57,6 +64,7 @@ export default function PatientsManager({
       hairStyle: p.hairStyle,
       hairColor: p.hairColor,
       classIds: p.classTemplateIds,
+      status: p.status,
     });
     setShowForm(true);
     setError(null);
@@ -80,8 +88,8 @@ export default function PatientsManager({
     setError(null);
     startTransition(async () => {
       const res = form.id
-        ? await updatePatient(form.id, form.name, form.skinTone, form.hairStyle, form.hairColor, form.classIds)
-        : await createPatient(form.name, form.skinTone, form.hairStyle, form.hairColor, form.classIds);
+        ? await updatePatient(form.id, form.name, form.skinTone, form.hairStyle, form.hairColor, form.classIds, form.status)
+        : await createPatient(form.name, form.skinTone, form.hairStyle, form.hairColor, form.classIds, form.status);
       if (!res.ok) {
         setError(res.error ?? "Er ging iets mis.");
         return;
@@ -100,12 +108,15 @@ export default function PatientsManager({
     });
   }
 
-  function toggleActive(p: Patient) {
+  function changeStatus(p: Patient, status: string) {
     startTransition(async () => {
-      await togglePatientActive(p.id, !p.active);
-      setPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, active: !x.active } : x)));
+      await setPatientStatus(p.id, status);
+      setPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, status } : x)));
     });
   }
+
+  const [search, setSearch] = useState("");
+  const visiblePatients = patients.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
@@ -118,6 +129,13 @@ export default function PatientsManager({
           + Nieuwe cliënt
         </button>
       </div>
+
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Zoek op naam..."
+        className="border-2 border-border rounded-xl px-4 py-2 focus:border-teal outline-none"
+      />
 
       {showForm && (
         <form
@@ -159,7 +177,7 @@ export default function PatientsManager({
 
           <div className="flex flex-col gap-1">
             <span className="text-sm font-medium text-ink-muted">Haar</span>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {HAIR_STYLES.map((h) => (
                 <button
                   type="button"
@@ -191,6 +209,19 @@ export default function PatientsManager({
                 />
               ))}
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-ink-muted">Status</span>
+            <select
+              value={form.status}
+              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+              className="border-2 border-border rounded-xl px-3 py-2 focus:border-teal outline-none"
+            >
+              <option value="actief">Actief</option>
+              <option value="pauze">Op pauze</option>
+              <option value="inactief">Inactief</option>
+            </select>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -231,8 +262,9 @@ export default function PatientsManager({
       )}
 
       <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
-        {patients.map((p) => {
-          const overdue = p.daysSinceLastCheckIn !== null && p.daysSinceLastCheckIn > ATTENDANCE_ALERT_DAYS;
+        {visiblePatients.map((p) => {
+          const overdue = isOverdue(p.daysSinceLastCheckIn, p.status);
+          const s = STATUS_STYLES[p.status] ?? STATUS_STYLES.actief;
           return (
             <div key={p.id} className="flex items-center justify-between px-5 py-3 gap-3">
               <div className="flex items-center gap-3">
@@ -242,13 +274,13 @@ export default function PatientsManager({
                     href={`/admin/patients/${p.id}`}
                     className={`font-semibold hover:text-teal ${overdue ? "text-danger" : "text-ink"}`}
                   >
+                    {overdue && "⚠ "}
                     {p.name}
                   </Link>
                   <p className={`text-xs ${overdue ? "text-danger font-medium" : "text-ink-muted"}`}>
                     {overdue
                       ? `Niet geweest sinds ${p.daysSinceLastCheckIn} dagen`
                       : `${p.classTemplateIds.length} ${p.classTemplateIds.length === 1 ? "les" : "lessen"}`}
-                    {!p.active && " · inactief"}
                   </p>
                 </div>
               </div>
@@ -265,11 +297,18 @@ export default function PatientsManager({
                   </p>
                   <p className="text-[10px] text-ink-muted uppercase tracking-wide">deze maand</p>
                 </div>
+                <select
+                  value={p.status}
+                  onChange={(e) => changeStatus(p, e.target.value)}
+                  style={{ color: s.text, backgroundColor: s.bg }}
+                  className="rounded-lg px-2 py-1 text-xs font-semibold border-none outline-none"
+                >
+                  <option value="actief">Actief</option>
+                  <option value="pauze">Op pauze</option>
+                  <option value="inactief">Inactief</option>
+                </select>
                 <button onClick={() => startEdit(p)} className="text-ink-muted hover:text-teal font-medium">
                   Bewerken
-                </button>
-                <button onClick={() => toggleActive(p)} className="text-ink-muted hover:text-amber-dark font-medium">
-                  {p.active ? "Deactiveren" : "Activeren"}
                 </button>
                 <button onClick={() => remove(p.id)} className="text-ink-muted hover:text-danger font-medium">
                   Verwijderen
@@ -278,7 +317,11 @@ export default function PatientsManager({
             </div>
           );
         })}
-        {patients.length === 0 && <p className="p-6 text-ink-muted">Nog geen cliënten toegevoegd.</p>}
+        {visiblePatients.length === 0 && (
+          <p className="p-6 text-ink-muted">
+            {patients.length === 0 ? "Nog geen cliënten toegevoegd." : "Geen cliënten gevonden."}
+          </p>
+        )}
       </div>
     </div>
   );

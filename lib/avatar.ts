@@ -16,10 +16,11 @@ export const HAIR_COLORS = [
 
 export const HAIR_STYLES = [
   { key: "bald", label: "Kaal" },
+  { key: "receding", label: "Terugwijkend" },
   { key: "short", label: "Kort" },
-  { key: "long", label: "Lang" },
+  { key: "long", label: "Golvend" },
   { key: "bun", label: "Knot" },
-  { key: "curly", label: "Krullen" },
+  { key: "curly", label: "Permanent" },
 ] as const;
 
 export type SkinToneKey = (typeof SKIN_TONES)[number]["key"];
