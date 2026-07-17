@@ -29,10 +29,10 @@ export default function LoginForm() {
     if (isPending) return;
     setError(null);
     setPin((prev) => {
-      const next = (prev + d).slice(0, 4);
-      if (next.length === 4) submit(next);
-      return next;
-    });
+    const next = (prev + d).slice(0, 4);
+    if (next.length === 4) submit(next);   // ← side effect inside a state updater
+    return next;
+  });
   }
 
   function backspace() {
