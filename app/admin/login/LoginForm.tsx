@@ -28,11 +28,7 @@ export default function LoginForm() {
   function appendDigit(d: string) {
     if (isPending) return;
     setError(null);
-    setPin((prev) => {
-    const next = (prev + d).slice(0, 4);
-    if (next.length === 4) submit(next);   // ← side effect inside a state updater
-    return next;
-  });
+    setPin((prev) => (prev + d).slice(0, 4));
   }
 
   function backspace() {
@@ -42,6 +38,13 @@ export default function LoginForm() {
   useEffect(() => {
     hiddenInputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (pin.length === 4) {
+      submit(pin);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pin]);
 
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-xs">
@@ -54,7 +57,6 @@ export default function LoginForm() {
         onChange={(e) => {
           const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
           setPin(digits);
-          if (digits.length === 4) submit(digits);
         }}
         className="sr-only"
         aria-label="Pincode"
