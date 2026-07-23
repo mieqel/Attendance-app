@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { logout } from "../../actions/admin";
+import { getOverduePatients } from "@/lib/insights";
 
 export default async function ProtectedAdminLayout({
   children,
@@ -13,16 +14,23 @@ export default async function ProtectedAdminLayout({
     redirect("/admin/login");
   }
 
+  const overdueCount = (await getOverduePatients()).length;
+
   return (
     <div className="flex-1 flex flex-col">
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-border bg-surface">
+      <nav className="print:hidden flex items-center justify-between px-6 py-4 border-b border-border bg-surface">
         <div className="flex items-center gap-6">
           <span className="font-display text-xl font-semibold text-teal-dark">Beheer</span>
           <Link href="/admin" className="text-ink-muted hover:text-teal font-medium">
             Overzicht
           </Link>
-          <Link href="/admin/patients" className="text-ink-muted hover:text-teal font-medium">
+          <Link href="/admin/patients" className="text-ink-muted hover:text-teal font-medium flex items-center">
             Cliënten
+            {overdueCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-[10px] font-bold">
+                {overdueCount}
+              </span>
+            )}
           </Link>
           <Link href="/admin/classes" className="text-ink-muted hover:text-teal font-medium">
             Lessen

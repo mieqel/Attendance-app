@@ -2,7 +2,7 @@ import { prisma } from "./prisma";
 import { DAY_NAMES_NL } from "./schedule";
 import { getAmsterdamNow, AmsterdamNow } from "./time";
 
-function toMinutes(hhmm: string): number {
+export function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
 }
