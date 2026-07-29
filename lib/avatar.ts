@@ -35,6 +35,20 @@ export function hairHex(key: string): string {
   return HAIR_COLORS.find((h) => h.key === key)?.hex ?? HAIR_COLORS[1].hex;
 }
 
+// Lightens (positive pct) or darkens (negative pct) a hex color — used to
+// build the light-to-dark gradient that gives hair some volume instead of
+// a single flat fill.
+export function shade(hex: string, pct: number): string {
+  const f = parseInt(hex.slice(1), 16);
+  const t = pct < 0 ? 0 : 255;
+  const p = Math.abs(pct);
+  const R = f >> 16, G = (f >> 8) & 0x00ff, B = f & 0x0000ff;
+  const nr = Math.round((t - R) * p) + R;
+  const ng = Math.round((t - G) * p) + G;
+  const nb = Math.round((t - B) * p) + B;
+  return "#" + (0x1000000 + nr * 0x10000 + ng * 0x100 + nb).toString(16).slice(1);
+}
+
 // A small fixed palette of shirt colors, auto-assigned per patient so avatars
 // have some visual variety without adding another decision for the patient to make.
 const SHIRT_COLORS = ["#2F6F62", "#C07F1F", "#5C7FA6", "#7A5C8E", "#B3452F", "#4C7A3F"];

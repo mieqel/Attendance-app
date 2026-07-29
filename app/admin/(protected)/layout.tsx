@@ -18,8 +18,8 @@ export default async function ProtectedAdminLayout({
 
   return (
     <div className="flex-1 flex flex-col">
-      <nav className="print:hidden flex items-center justify-between px-6 py-4 border-b border-border bg-surface">
-        <div className="flex items-center gap-6">
+      <nav className="print:hidden flex items-center justify-between px-6 py-4 border-b border-border bg-surface gap-4 overflow-x-auto">
+        <div className="flex items-center gap-6 whitespace-nowrap">
           <span className="font-display text-xl font-semibold text-teal-dark">Beheer</span>
           <Link href="/admin" className="text-ink-muted hover:text-teal font-medium">
             Overzicht
@@ -36,8 +36,8 @@ export default async function ProtectedAdminLayout({
             Lessen
           </Link>
         </div>
-        <form action={logout}>
-          <button className="text-ink-muted hover:text-danger font-medium" type="submit">
+        <form action={logout} className="flex-shrink-0">
+          <button className="text-ink-muted hover:text-danger font-medium whitespace-nowrap" type="submit">
             Uitloggen
           </button>
         </form>

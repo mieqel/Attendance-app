@@ -3,20 +3,28 @@
 @tailwind utilities;
 
 :root {
-  /* Palette: matches Fysiotherapie Meerzicht's own brand colors —
-     red, yellow, and white. --teal/--amber names are kept as-is so no
-     component code needs renaming; only the hex values changed. */
-  --bg: #faf9f7;
-  --surface: #ffffff;
-  --surface-muted: #f3ede9;
-  --ink: #241012;
-  --ink-muted: #7a6a6c;
-  --teal: #bf1e2e;
-  --teal-dark: #8f1620;
+  /* Dark palette by default. The red accent is lighter/more saturated than
+     the light-mode brand red (#bf1e2e) — the original would read muddy and
+     low-contrast against a dark background, so it's brightened here while
+     staying clearly "the same red" as the rest of the clinic's branding. */
+  --bg: #1c1416;
+  --surface: #251b1d;
+  --surface-muted: #322426;
+  --ink: #f3e9e7;
+  --ink-muted: #b09a97;
+  --teal: #e2505c;
+  --teal-dark: #f0838c;
   --amber: #f8c944;
-  --amber-dark: #a9860a;
-  --border: #ecdfdd;
-  --danger: #8f1620;
+  --amber-dark: #f2d878;
+  --border: #432f31;
+  --danger: #e2505c;
+
+  /* Avatar "photo background" circle — a dedicated dark tone instead of
+     the light mint used in light mode, which would look like a bright
+     cutout box floating on a dark page. */
+  --avatar-bg: #3a2c2e;
+  /* Soft tint used behind day-pills and icon-button hover states. */
+  --tint: #3d2528;
 
   --font-display: "Fredoka", sans-serif;
   --font-body: "Inter", sans-serif;
@@ -36,6 +44,13 @@ h1, h2, h3, .font-display {
 :focus-visible {
   outline: 3px solid var(--teal);
   outline-offset: 2px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  animation: spin 0.7s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

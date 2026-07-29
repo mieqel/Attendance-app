@@ -253,7 +253,7 @@ export default async function AdminDashboard() {
           <h3 className="font-semibold text-ink text-sm mb-3">Status verdeling</h3>
           <div className="flex items-center gap-4">
             <svg width="84" height="84" viewBox="0 0 42 42">
-              <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#ecdfdd" strokeWidth="6" />
+              <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="var(--border)" strokeWidth="6" />
               {donutSegments.map((s) => (
                 <circle
                   key={s.key}

@@ -71,15 +71,32 @@ export async function updatePatient(
   if (!name.trim()) {
     return { ok: false, error: "Naam is verplicht." };
   }
+
+  // Only touch the rows that actually changed, instead of deleting and
+  // recreating every PatientClass row on every save. Keeps history-minded
+  // metadata (e.g. a future "enrolled since" column) intact for classes
+  // the patient was already in, and avoids needless churn for classes
+  // that didn't change at all.
+  const current = await prisma.patientClass.findMany({
+    where: { patientId },
+    select: { classTemplateId: true },
+  });
+  const currentIds: Set<string> = new Set(current.map((c: { classTemplateId: string }) => c.classTemplateId));
+  const nextIds: Set<string> = new Set(classTemplateIds);
+  const toAdd: string[] = classTemplateIds.filter((id) => !currentIds.has(id));
+  const toRemove: string[] = Array.from(currentIds).filter((id) => !nextIds.has(id));
+
   await prisma.$transaction([
     prisma.patient.update({
       where: { id: patientId },
       data: { name: name.trim(), skinTone, hairStyle, hairColor, status, active: status !== "inactief" },
     }),
-    prisma.patientClass.deleteMany({ where: { patientId } }),
-    prisma.patientClass.createMany({
-      data: classTemplateIds.map((id) => ({ patientId, classTemplateId: id })),
-    }),
+    ...(toRemove.length > 0
+      ? [prisma.patientClass.deleteMany({ where: { patientId, classTemplateId: { in: toRemove } } })]
+      : []),
+    ...(toAdd.length > 0
+      ? [prisma.patientClass.createMany({ data: toAdd.map((id) => ({ patientId, classTemplateId: id })) })]
+      : []),
   ]);
   revalidatePath("/admin/patients");
   revalidatePath(`/admin/patients/${patientId}`);
@@ -185,5 +202,33 @@ export async function deleteClass(id: string) {
   await requireAdmin();
   await prisma.classTemplate.delete({ where: { id } });
   revalidatePath("/admin/classes");
+  return { ok: true };
+}
+
+// Enrolls one patient in one class — used by the roster drawer on the
+// Lessen page. Upsert so a duplicate click (e.g. a double-tap) is a no-op
+// instead of a unique-constraint error.
+export async function addPatientToClass(patientId: string, classTemplateId: string) {
+  await requireAdmin();
+  await prisma.patientClass.upsert({
+    where: { patientId_classTemplateId: { patientId, classTemplateId } },
+    update: {},
+    create: { patientId, classTemplateId },
+  });
+  revalidatePath("/admin/classes");
+  revalidatePath("/admin/patients");
+  revalidatePath(`/admin/patients/${patientId}`);
+  return { ok: true };
+}
+
+// Removes one patient from one class — the other half of the roster
+// drawer. deleteMany rather than delete so removing someone who's already
+// gone (e.g. two admins acting at once) doesn't throw.
+export async function removePatientFromClass(patientId: string, classTemplateId: string) {
+  await requireAdmin();
+  await prisma.patientClass.deleteMany({ where: { patientId, classTemplateId } });
+  revalidatePath("/admin/classes");
+  revalidatePath("/admin/patients");
+  revalidatePath(`/admin/patients/${patientId}`);
   return { ok: true };
 }

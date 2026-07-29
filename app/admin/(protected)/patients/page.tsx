@@ -38,6 +38,7 @@ export default async function PatientsPage() {
       classTemplateIds: p.classes.map((c) => c.classTemplateId),
       checkInsThisWeek: p.checkIns.filter((c) => c.checkedInAt >= weekStart).length,
       checkInsThisMonth: p.checkIns.filter((c) => c.checkedInAt >= monthStart).length,
+      checkInsTotal: p.checkIns.length,
       daysSinceLastCheckIn: lastCheckIn ? daysSince(lastCheckIn) : null,
     };
   });
