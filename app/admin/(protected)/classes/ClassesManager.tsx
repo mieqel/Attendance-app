@@ -362,7 +362,8 @@ export default function ClassesManager({
             <p className="text-sm text-ink-muted">Nog geen lessen ingepland.</p>
           ) : (
             <>
-              <div className="grid grid-cols-7 gap-1 mb-1">
+              <div className="grid grid-cols-[38px_repeat(7,1fr)] gap-1 mb-1">
+                <span />
                 {SHORT_DAY_LABELS.map((d) => (
                   <span key={d} className="text-[9px] text-center text-ink-muted font-semibold">
                     {d}
@@ -371,7 +372,8 @@ export default function ClassesManager({
               </div>
               <div className="flex flex-col gap-1">
                 {heatmap.map((row) => (
-                  <div key={row.time} className="grid grid-cols-7 gap-1">
+                  <div key={row.time} className="grid grid-cols-[38px_repeat(7,1fr)] gap-1 items-center">
+                    <span className="text-[9px] text-ink-muted text-right pr-1 tabular-nums">{row.time}</span>
                     {row.days.map((on, i) => (
                       <div
                         key={i}
@@ -382,6 +384,10 @@ export default function ClassesManager({
                   </div>
                 ))}
               </div>
+              <p className="text-[11px] text-ink-muted mt-3 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-amber inline-block flex-shrink-0" />
+                Geel = er staat een les gepland op dat tijdstip
+              </p>
             </>
           )}
         </div>

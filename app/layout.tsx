@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fredoka, Inter } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const fredoka = Fredoka({
@@ -26,7 +27,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="nl" className={`${fredoka.variable} ${inter.variable} h-full`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`try{var t=localStorage.getItem("theme");if(t==="light")document.documentElement.setAttribute("data-theme","light");}catch(e){}`}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

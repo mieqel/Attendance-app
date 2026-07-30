@@ -30,10 +30,31 @@
   --font-body: "Inter", sans-serif;
 }
 
+/* Light theme — brighter surfaces, same brand red, but the red itself
+   goes back to the muddier brand tone since it doesn't need to fight
+   a dark background for contrast here. Toggled via [data-theme="light"]
+   on <html>; the block above stays the default (no attribute = dark). */
+[data-theme="light"] {
+  --bg: #faf6f4;
+  --surface: #ffffff;
+  --surface-muted: #f4ece9;
+  --ink: #2a1719;
+  --ink-muted: #8a6f6c;
+  --teal: #bf1e2e;
+  --teal-dark: #8f1620;
+  --amber: #f0b429;
+  --amber-dark: #b3790a;
+  --border: #e7dad7;
+  --danger: #bf1e2e;
+  --avatar-bg: #d9ecd9;
+  --tint: #f7e5e2;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 h1, h2, h3, .font-display {

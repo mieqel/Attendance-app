@@ -9,7 +9,7 @@ import {
   getStatusCounts,
   getWeeklyCheckInTrend,
 } from "@/lib/insights";
-import PrintButton from "./PrintButton";
+import ThemeToggle from "./ThemeToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -58,13 +58,21 @@ export default async function AdminDashboard() {
   const maxCount = Math.max(1, ...chartData.map((m) => m.count));
 
   // ---- widget data ----
-  const [current, weeklyTrend, overduePatients, statusCounts, totalClassSlots] = await Promise.all([
+  const [current, weeklyTrend, overduePatientsAll, statusCounts, totalClassSlots] = await Promise.all([
     getCurrentClass(),
     getWeeklyCheckInTrend(),
-    getOverduePatients(5),
+    getOverduePatients(),
     getStatusCounts(),
     prisma.classTemplate.count(),
   ]);
+  const overduePatients = overduePatientsAll.slice(0, 5);
+
+  // ---- top stat card numbers ----
+  const totalEnrolledToday = rows.reduce((sum, r) => sum + r.enrolled, 0);
+  const totalCheckedInToday = rows.reduce((sum, r) => sum + r.checkedIn, 0);
+  const todayOccupancyPct =
+    totalEnrolledToday > 0 ? Math.round((totalCheckedInToday / totalEnrolledToday) * 100) : null;
+  const longestOverdueDays = overduePatientsAll[0]?.days ?? null;
 
   const activeRow = current.active ? rows.find((r) => r.entry.id === current.active!.id) : undefined;
   const activeProgressPct = current.active
@@ -112,7 +120,56 @@ export default async function AdminDashboard() {
               Vandaag is het {DAY_NAMES_NL[dayOfWeek]} · {totalPatients} actieve cliënten
             </p>
           </div>
-          <PrintButton />
+          <ThemeToggle />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 print:hidden">
+          <div className="rounded-2xl p-5 text-white flex flex-col gap-3.5" style={{ background: "var(--teal)" }}>
+            <p className="font-semibold text-sm">Vandaag</p>
+            <p className="font-display text-2xl font-semibold">
+              {totalCheckedInToday} / {totalEnrolledToday}
+            </p>
+            <div className="flex gap-4 text-[11px] opacity-90">
+              <div>
+                <span className="block text-xs font-semibold opacity-100">
+                  {todayOccupancyPct !== null ? `${todayOccupancyPct}%` : "–"}
+                </span>
+                bezetting
+              </div>
+              <div>
+                <span className="block text-xs font-semibold opacity-100">{rows.length}</span>
+                lessen vandaag
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-5 text-white flex flex-col gap-3.5" style={{ background: "#3fa671" }}>
+            <p className="font-semibold text-sm">Actieve cliënten</p>
+            <p className="font-display text-2xl font-semibold">{totalPatients}</p>
+            <div className="flex gap-4 text-[11px] opacity-90">
+              <div>
+                <span className="block text-xs font-semibold opacity-100">
+                  {weeklyTrend.changePct === null
+                    ? "–"
+                    : `${weeklyTrend.changePct > 0 ? "▲" : "▼"} ${Math.abs(weeklyTrend.changePct)}%`}
+                </span>
+                t.o.v. vorige week
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-5 flex flex-col gap-3.5" style={{ background: "var(--amber)", color: "#3a2900" }}>
+            <p className="font-semibold text-sm">Aandacht nodig</p>
+            <p className="font-display text-2xl font-semibold">{overduePatientsAll.length}</p>
+            <div className="flex gap-4 text-[11px] opacity-90">
+              <div>
+                <span className="block text-xs font-semibold opacity-100">
+                  {longestOverdueDays !== null ? `${longestOverdueDays}+ dagen` : "–"}
+                </span>
+                langste afwezigheid
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
