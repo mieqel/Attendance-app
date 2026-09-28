@@ -57,6 +57,28 @@ body {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
+/* Native form controls follow the theme — without this, <select> rendered
+   as a white box with near-white text in dark mode. */
+select,
+input:not([type]),
+input[type="date"],
+input[type="text"],
+input[type="search"] {
+  background-color: var(--surface);
+  color: var(--ink);
+  color-scheme: dark;
+}
+[data-theme="light"] select,
+[data-theme="light"] input:not([type]),
+[data-theme="light"] input[type="date"],
+[data-theme="light"] input[type="text"],
+[data-theme="light"] input[type="search"] {
+  color-scheme: light;
+}
+input[type="checkbox"] {
+  accent-color: var(--teal);
+}
+
 h1, h2, h3, .font-display {
   font-family: var(--font-display);
 }
@@ -66,6 +88,40 @@ h1, h2, h3, .font-display {
   outline: 3px solid var(--teal);
   outline-offset: 2px;
 }
+
+.cal-adding {
+  color: var(--amber-dark);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+}
+[data-theme="light"] .cal-adding {
+  color: #8a5a00;
+}
+.cal-absent {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink-muted) 28%, transparent);
+}
+.toast-surface {
+  background: #2e2022;
+  color: #f7eeec;
+  border: 1px solid #4a3437;
+}
+.tint-teal {
+  background: color-mix(in srgb, var(--teal) 12%, transparent);
+}
+.cal-removing {
+  background: color-mix(in srgb, var(--teal) 25%, transparent);
+}
+
+@keyframes toast-in {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.toast-in { animation: toast-in 0.2s ease-out; }
+@keyframes toast-bar {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+.toast-bar { animation-name: toast-bar; animation-timing-function: linear; animation-fill-mode: forwards; }
 
 @keyframes spin {
   to { transform: rotate(360deg); }

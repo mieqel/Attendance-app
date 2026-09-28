@@ -36,14 +36,63 @@ const links = [
   },
 ];
 
-export default function SidebarNav({ overdueCount }: { overdueCount: number }) {
+function isActive(pathname: string, href: string) {
+  return href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+}
+
+// Desktop/tablet: vertical list inside the sidebar.
+// Phone: a fixed bottom tab bar (variant="bottom") — the 232px sidebar
+// ate half the screen on a phone, so below `md` it's replaced by this.
+export default function SidebarNav({
+  overdueCount,
+  variant = "side",
+}: {
+  overdueCount: number;
+  variant?: "side" | "bottom";
+}) {
   const pathname = usePathname();
+
+  if (variant === "bottom") {
+    return (
+      <nav
+        className="md:hidden print:hidden fixed bottom-0 inset-x-0 z-30 bg-surface-muted/95 backdrop-blur border-t border-border grid grid-cols-3"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {links.map((l) => {
+          const active = isActive(pathname, l.href);
+          return (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={`relative flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-semibold transition-colors ${
+                active ? "text-teal-dark" : "text-ink-muted"
+              }`}
+            >
+              <span
+                className={`w-12 h-7 rounded-full flex items-center justify-center transition-colors ${
+                  active ? "bg-teal text-white" : ""
+                }`}
+              >
+                <span className="w-[19px] h-[19px] [&>svg]:w-full [&>svg]:h-full">{l.icon}</span>
+              </span>
+              {l.label}
+              {l.href === "/admin/patients" && overdueCount > 0 && (
+                <span className="absolute top-1.5 left-1/2 ml-3 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber text-[#3a2900] text-[10px] font-bold">
+                  {overdueCount}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+    );
+  }
 
   return (
     <nav className="flex flex-col gap-1">
       <p className="text-[10px] uppercase tracking-wide text-ink-muted px-2.5 mb-1">Menu</p>
       {links.map((l) => {
-        const active = l.href === "/admin" ? pathname === "/admin" : pathname.startsWith(l.href);
+        const active = isActive(pathname, l.href);
         return (
           <Link
             key={l.href}

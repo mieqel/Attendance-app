@@ -3,31 +3,53 @@
 // same logic (e.g. "who's overdue") can't drift between pages.
 import { prisma } from "./prisma";
 import { startOfAmsterdamWeek } from "./currentClass";
-import { daysSince, isOverdue } from "./attendance";
+import { attendanceClock } from "./attendance";
 import { DAY_NAMES_NL } from "./schedule";
 
-export type OverduePatient = { id: string; name: string; days: number };
+export type OverduePatient = { id: string; name: string; days: number; neverCame: boolean };
 
-// Active patients who haven't checked in for longer than ATTENDANCE_ALERT_DAYS.
-// Same rule as the "⚠" flag on the patients list, sorted worst-first.
+// Patients on "pauze" whose end date has passed go back to "actief".
+// Called at the top of every admin page load — one cheap UPDATE that's
+// usually a no-op — so no cron job is needed.
+export async function reactivateExpiredPauses() {
+  await prisma.patient.updateMany({
+    where: { status: "pauze", pauseUntil: { lte: new Date() } },
+    data: { status: "actief", active: true },
+  });
+}
+
+// Active patients who need a call: no check-in (or excused absence, or
+// pause ending) for longer than the alert limit — including people who
+// registered but never came. Same rule as the "⚠" flag on the patients
+// list, sorted worst-first.
 export async function getOverduePatients(limit?: number): Promise<OverduePatient[]> {
   const patients = await prisma.patient.findMany({
     where: { status: "actief" },
     select: {
       id: true,
       name: true,
+      status: true,
+      createdAt: true,
+      pauseUntil: true,
       checkIns: { select: { checkedInAt: true }, orderBy: { checkedInAt: "desc" }, take: 1 },
+      absences: { select: { date: true }, orderBy: { date: "desc" }, take: 1 },
     },
   });
 
   const overdue = patients
     .map((p) => {
-      const last = p.checkIns[0]?.checkedInAt ?? null;
-      const days = last ? daysSince(last) : null;
-      return { id: p.id, name: p.name, days };
+      const clock = attendanceClock({
+        status: p.status,
+        createdAt: p.createdAt,
+        lastCheckIn: p.checkIns[0]?.checkedInAt ?? null,
+        lastExcusedDate: p.absences[0]?.date ?? null,
+        pauseUntil: p.pauseUntil,
+      });
+      return { id: p.id, name: p.name, days: clock.days, neverCame: clock.neverCame, overdue: clock.overdue };
     })
-    .filter((p): p is { id: string; name: string; days: number } => isOverdue(p.days, "actief"))
-    .sort((a, b) => b.days - a.days);
+    .filter((p) => p.overdue)
+    .sort((a, b) => b.days - a.days)
+    .map(({ id, name, days, neverCame }) => ({ id, name, days, neverCame }));
 
   return limit ? overdue.slice(0, limit) : overdue;
 }

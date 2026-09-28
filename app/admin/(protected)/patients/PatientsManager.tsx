@@ -2,10 +2,13 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useToast } from "../Toast";
 import AvatarSvg from "../../../AvatarSvg";
 import { PencilIcon, TrashIcon, Spinner, EmptyPeopleIcon, SearchOffIcon } from "../../../Icons";
 import { SKIN_TONES, HAIR_COLORS, HAIR_STYLES } from "@/lib/avatar";
-import { isOverdue } from "@/lib/attendance";
+import { overdueText, type AttendanceClock } from "@/lib/attendance";
+import AttendanceCalendar from "./AttendanceCalendar";
 import {
   createPatient,
   updatePatient,
@@ -25,10 +28,11 @@ type Patient = {
   checkInsThisWeek: number;
   checkInsThisMonth: number;
   checkInsTotal: number;
-  daysSinceLastCheckIn: number | null;
+  pauseUntil: string | null;
+  clock: AttendanceClock;
 };
 
-type OverdueEntry = { id: string; name: string; days: number };
+type OverdueEntry = { id: string; name: string; days: number; neverCame: boolean };
 type TopAttenderEntry = { id: string; name: string; count: number };
 type RecentEntry = { id: string; name: string; daysAgo: number };
 type StatusCounts = { actief: number; pauze: number; inactief: number };
@@ -39,7 +43,7 @@ const STATUS_STYLES: Record<string, { text: string; bg: string; label: string }>
   inactief: { text: "#8f1620", bg: "#fbe4e5", label: "Inactief" },
 };
 
-type ClassTemplate = { id: string; label: string };
+type ClassTemplate = { id: string; label: string; dayOfWeek: number; startTime: string };
 
 const EMPTY_FORM = {
   id: null as string | null,
@@ -49,6 +53,7 @@ const EMPTY_FORM = {
   hairColor: HAIR_COLORS[1].key as string,
   classIds: [] as string[],
   status: "actief" as string,
+  pauseUntil: null as string | null,
 };
 
 export default function PatientsManager({
@@ -66,7 +71,14 @@ export default function PatientsManager({
   topAttenders: TopAttenderEntry[];
   recentlyAdded: RecentEntry[];
 }) {
+  const router = useRouter();
+  const { showUndo } = useToast();
   const [patients, setPatients] = useState(initialPatients);
+  // Fresh server data (after router.refresh()) replaces local state, so
+  // counters and "Aandacht nodig" are always computed by the server.
+  useEffect(() => setPatients(initialPatients), [initialPatients]);
+  // Clients deleted in the last few seconds — hidden while the undo toast is up.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -96,28 +108,41 @@ export default function PatientsManager({
       }
       setShowForm(false);
       setForm(EMPTY_FORM);
-      window.location.reload();
+      router.refresh();
     });
   }
 
+  // No confirm() pop-up: hide straight away, delete for real after 5s
+  // unless "Ongedaan maken" is tapped.
   function remove(id: string) {
-    if (!confirm("Deze cliënt verwijderen? Dit verwijdert ook de geschiedenis.")) return;
-    startTransition(async () => {
-      await deletePatient(id);
-      setPatients((prev) => prev.filter((p) => p.id !== id));
-      if (openPatientId === id) setOpenPatientId(null);
+    const name = patients.find((p) => p.id === id)?.name ?? "Cliënt";
+    setHidden((prev) => new Set(prev).add(id));
+    if (openPatientId === id) closeDrawer();
+    showUndo({
+      message: `${name} verwijderd`,
+      commit: async () => {
+        await deletePatient(id);
+        router.refresh();
+      },
+      onUndo: () =>
+        setHidden((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        }),
     });
   }
 
   function changeStatus(p: Patient, status: string) {
     startTransition(async () => {
-      await setPatientStatus(p.id, status);
       setPatients((prev) => prev.map((x) => (x.id === p.id ? { ...x, status } : x)));
+      await setPatientStatus(p.id, status);
+      router.refresh();
     });
   }
 
   const [search, setSearch] = useState("");
-  const visiblePatients = patients.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const visiblePatients = patients.filter((p) => !hidden.has(p.id) && p.name.toLowerCase().includes(search.toLowerCase()));
 
   const statusTotal = statusCounts.actief + statusCounts.pauze + statusCounts.inactief || 1;
   const donut = [
@@ -160,6 +185,7 @@ export default function PatientsManager({
       hairColor: p.hairColor,
       classIds: p.classTemplateIds,
       status: p.status,
+      pauseUntil: p.status === "pauze" ? p.pauseUntil : null,
     });
     setDrawerError(null);
   }
@@ -176,9 +202,12 @@ export default function PatientsManager({
   function saveDrawer() {
     if (!draft || !draft.id) return;
     setDrawerError(null);
-    const { id, name, skinTone, hairStyle, hairColor, classIds, status } = draft;
+    const { id, name, skinTone, hairStyle, hairColor, classIds, status, pauseUntil } = draft;
     startDrawerTransition(async () => {
-      const res = await updatePatient(id, name, skinTone, hairStyle, hairColor, classIds, status);
+      const res = await updatePatient(
+        id, name, skinTone, hairStyle, hairColor, classIds, status,
+        status === "pauze" ? pauseUntil : null
+      );
       if (!res.ok) {
         setDrawerError(res.error ?? "Er ging iets mis.");
         return;
@@ -191,17 +220,18 @@ export default function PatientsManager({
         )
       );
       closeDrawer();
+      router.refresh();
     });
   }
 
   const openPatient = patients.find((p) => p.id === openPatientId) ?? null;
-  const openOverdue = openPatient ? isOverdue(openPatient.daysSinceLastCheckIn, openPatient.status) : false;
+  const openOverdue = openPatient ? openPatient.clock.overdue : false;
 
   return (
     <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,760px)_1fr] lg:items-start">
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
-          <h1 className="font-display text-3xl font-semibold text-ink">Cliënten</h1>
+          <h1 className="font-display text-2xl md:text-3xl font-semibold text-ink">Cliënten</h1>
           <button
             onClick={startNew}
             className="bg-teal text-white rounded-xl px-4 py-2 font-semibold hover:bg-teal-dark"
@@ -342,39 +372,44 @@ export default function PatientsManager({
 
         <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
           {visiblePatients.map((p) => {
-            const overdue = isOverdue(p.daysSinceLastCheckIn, p.status);
+            const overdue = p.clock.overdue;
             const s = STATUS_STYLES[p.status] ?? STATUS_STYLES.actief;
             return (
-              <div key={p.id} className="flex items-center justify-between px-5 py-3 gap-3">
+              <div key={p.id} className="flex items-center justify-between px-3 sm:px-5 py-3 gap-2 sm:gap-3">
                 <button
                   onClick={() => openDrawer(p)}
-                  className="flex items-center gap-3 text-left"
+                  className="flex items-center gap-3 text-left flex-1 min-w-0"
                 >
                   <AvatarSvg skinTone={p.skinTone} hairStyle={p.hairStyle} hairColor={p.hairColor} seed={p.id} size={40} />
-                  <div>
-                    <span className={`font-semibold hover:text-teal ${overdue ? "text-danger" : "text-ink"}`}>
+                  <div className="min-w-0">
+                    <span className={`block truncate font-semibold hover:text-teal ${overdue ? "text-danger" : "text-ink"}`}>
                       {overdue && "⚠ "}
                       {p.name}
                     </span>
-                    <p className={`text-xs ${overdue ? "text-danger font-medium" : "text-ink-muted"}`}>
+                    <p className={`text-xs truncate ${overdue ? "text-danger font-medium" : "text-ink-muted"}`}>
                       {overdue
-                        ? `Niet geweest sinds ${p.daysSinceLastCheckIn} dagen`
-                        : `${p.classTemplateIds.length} ${p.classTemplateIds.length === 1 ? "les" : "lessen"}`}
+                        ? overdueText(p.clock)
+                        : p.status === "pauze" && p.pauseUntil
+                          ? `Op pauze · terug ${formatShortDate(p.pauseUntil)}`
+                          : `${p.classTemplateIds.length} ${p.classTemplateIds.length === 1 ? "les" : "lessen"}`}
                     </p>
                   </div>
                 </button>
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="text-right mr-2">
+                <div className="flex items-center gap-2 text-sm shrink-0">
+                  <div className="hidden sm:block text-right mr-2">
                     <p className="font-display text-lg font-semibold text-teal-dark leading-none">
                       {p.checkInsThisWeek}
                     </p>
                     <p className="text-[10px] text-ink-muted uppercase tracking-wide">deze week</p>
                   </div>
-                  <div className="text-right mr-2">
+                  <div className="text-right sm:mr-2">
                     <p className="font-display text-lg font-semibold text-teal-dark leading-none">
                       {p.checkInsThisMonth}
                     </p>
-                    <p className="text-[10px] text-ink-muted uppercase tracking-wide">deze maand</p>
+                    <p className="text-[10px] text-ink-muted uppercase tracking-wide">
+                      <span className="sm:hidden">mnd</span>
+                      <span className="hidden sm:inline">deze maand</span>
+                    </p>
                   </div>
                   <select
                     value={p.status}
@@ -390,7 +425,7 @@ export default function PatientsManager({
                     onClick={() => openDrawer(p)}
                     aria-label={`${p.name} bewerken`}
                     title="Bewerken"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-muted hover:text-teal hover:bg-[var(--tint)]"
+                    className="hidden sm:flex w-8 h-8 rounded-lg items-center justify-center text-ink-muted hover:text-teal hover:bg-[var(--tint)]"
                   >
                     <PencilIcon />
                   </button>
@@ -398,7 +433,7 @@ export default function PatientsManager({
                     onClick={() => remove(p.id)}
                     aria-label={`${p.name} verwijderen`}
                     title="Verwijderen"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-muted hover:text-danger hover:bg-[var(--tint)]"
+                    className="hidden sm:flex w-8 h-8 rounded-lg items-center justify-center text-ink-muted hover:text-danger hover:bg-[var(--tint)]"
                   >
                     <TrashIcon />
                   </button>
@@ -465,7 +500,7 @@ export default function PatientsManager({
         {/* Aandacht nodig */}
         <div className="bg-surface border border-border rounded-2xl p-5">
           <h3 className="font-semibold text-ink text-sm mb-1">Aandacht nodig</h3>
-          <p className="text-xs text-ink-muted mb-3">&gt; 30 dagen niet geweest</p>
+          <p className="text-xs text-ink-muted mb-3">&gt; 30 dagen niet gezien, of nog nooit geweest</p>
           {overduePatients.length === 0 ? (
             <p className="text-sm" style={{ color: "#1f6d3f" }}>Niemand is momenteel te lang weggebleven.</p>
           ) : (
@@ -474,7 +509,7 @@ export default function PatientsManager({
                 <div key={p.id} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
                   <span className="font-semibold text-sm text-ink">{p.name}</span>
                   <span className="text-xs font-medium" style={{ color: "#8f1620" }}>
-                    {p.days} dagen
+                    {p.neverCame ? "nooit geweest" : `${p.days} dagen`}
                   </span>
                 </div>
               ))}
@@ -536,7 +571,7 @@ export default function PatientsManager({
         }`}
       />
       <div
-        className={`fixed top-0 right-0 bottom-0 w-[420px] max-w-[92vw] bg-surface shadow-[-8px_0_32px_rgba(36,16,18,0.18)] z-50 flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 bottom-0 w-full sm:w-[420px] sm:max-w-[92vw] bg-surface shadow-[-8px_0_32px_rgba(36,16,18,0.18)] z-50 flex flex-col transition-transform duration-300 ease-out ${
           openPatientId ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -585,9 +620,16 @@ export default function PatientsManager({
 
               {openOverdue && (
                 <div className="border-2 border-danger text-danger rounded-2xl px-4 py-3 font-semibold text-sm mb-4" style={{ backgroundColor: "rgba(179, 69, 47, 0.08)" }}>
-                  Niet meer geweest sinds {openPatient.daysSinceLastCheckIn} dagen
+                  {overdueText(openPatient.clock)}
                 </div>
               )}
+
+              <AttendanceCalendar
+                patientId={openPatient.id}
+                enrolledClassIds={openPatient.classTemplateIds}
+                classTemplates={classTemplates}
+                onSaved={() => router.refresh()}
+              />
 
               <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted mb-2">Status</div>
               <select
@@ -599,6 +641,51 @@ export default function PatientsManager({
                 <option value="pauze">Op pauze</option>
                 <option value="inactief">Inactief</option>
               </select>
+              {/* Pause with a return date: switches back to "actief" automatically. */}
+              <div
+                className={`grid transition-[grid-template-rows,opacity] duration-200 ${
+                  draft.status === "pauze" ? "grid-rows-[1fr] opacity-100 -mt-2 mb-4" : "grid-rows-[0fr] opacity-0"
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <div className="bg-surface-muted rounded-xl p-3 flex flex-col gap-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-ink-muted shrink-0">Terug vanaf</span>
+                      <input
+                        type="date"
+                        value={draft.pauseUntil ?? ""}
+                        min={addDays(todayIso(), 1)}
+                        onChange={(e) => setDraft((d) => (d ? { ...d, pauseUntil: e.target.value || null } : d))}
+                        className="flex-1 min-w-0 border-2 border-border rounded-xl px-2.5 py-1.5 focus:border-teal outline-none text-sm"
+                      />
+                    </label>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {[
+                        { label: "1 week", days: 7 },
+                        { label: "2 weken", days: 14 },
+                        { label: "4 weken", days: 28 },
+                        { label: "Onbepaald", days: 0 },
+                      ].map((o) => (
+                        <button
+                          key={o.label}
+                          type="button"
+                          onClick={() =>
+                            setDraft((d) => (d ? { ...d, pauseUntil: o.days ? addDays(todayIso(), o.days) : null } : d))
+                          }
+                          className="px-2.5 py-1 rounded-full text-xs font-semibold border-2 border-border text-ink-muted hover:border-teal hover:text-ink"
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-ink-muted">
+                      {draft.pauseUntil
+                        ? `Wordt op ${formatShortDate(draft.pauseUntil)} automatisch weer actief.`
+                        : "Geen einddatum — zet zelf terug op actief."}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted mb-2">Ingeschreven lessen</div>
               <div className="flex flex-col gap-1 mb-4">
@@ -689,7 +776,7 @@ export default function PatientsManager({
                 href={`/admin/patients/${openPatient.id}`}
                 className="text-sm font-medium text-teal-dark hover:underline"
               >
-                Volledige geschiedenis bekijken →
+                Volledige geschiedenis (lijst) →
               </Link>
             </div>
           </>
@@ -697,4 +784,16 @@ export default function PatientsManager({
       </div>
     </div>
   );
+}
+
+function todayIso() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
+}
+function addDays(iso: string, days: number) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function formatShortDate(iso: string) {
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("nl-NL", { day: "numeric", month: "short", timeZone: "UTC" });
 }

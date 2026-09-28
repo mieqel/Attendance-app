@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { startOfAmsterdamWeek, startOfAmsterdamMonth } from "@/lib/currentClass";
-import { daysSince, isOverdue } from "@/lib/attendance";
+import { daysSince, attendanceClock } from "@/lib/attendance";
 import PatientsManager from "./PatientsManager";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,7 @@ export default async function PatientsPage() {
       include: {
         classes: { include: { classTemplate: true } },
         checkIns: { select: { checkedInAt: true } },
+        absences: { select: { date: true }, orderBy: { date: "desc" }, take: 1 },
       },
       orderBy: { name: "asc" },
     }),
@@ -39,7 +40,14 @@ export default async function PatientsPage() {
       checkInsThisWeek: p.checkIns.filter((c) => c.checkedInAt >= weekStart).length,
       checkInsThisMonth: p.checkIns.filter((c) => c.checkedInAt >= monthStart).length,
       checkInsTotal: p.checkIns.length,
-      daysSinceLastCheckIn: lastCheckIn ? daysSince(lastCheckIn) : null,
+      pauseUntil: p.pauseUntil ? p.pauseUntil.toISOString().slice(0, 10) : null,
+      clock: attendanceClock({
+        status: p.status,
+        createdAt: p.createdAt,
+        lastCheckIn,
+        lastExcusedDate: p.absences[0]?.date ?? null,
+        pauseUntil: p.pauseUntil,
+      }),
     };
   });
 
@@ -50,10 +58,10 @@ export default async function PatientsPage() {
   }
 
   const overduePatients = patientsForClient
-    .filter((p) => isOverdue(p.daysSinceLastCheckIn, p.status))
-    .sort((a, b) => (b.daysSinceLastCheckIn ?? 0) - (a.daysSinceLastCheckIn ?? 0))
+    .filter((p) => p.clock.overdue)
+    .sort((a, b) => b.clock.days - a.clock.days)
     .slice(0, 5)
-    .map((p) => ({ id: p.id, name: p.name, days: p.daysSinceLastCheckIn ?? 0 }));
+    .map((p) => ({ id: p.id, name: p.name, days: p.clock.days, neverCame: p.clock.neverCame }));
 
   const topAttenders = [...patientsForClient]
     .filter((p) => p.checkInsThisMonth > 0)
@@ -69,7 +77,7 @@ export default async function PatientsPage() {
   return (
     <PatientsManager
       initialPatients={patientsForClient}
-      classTemplates={classTemplates.map((c) => ({ id: c.id, label: c.label }))}
+      classTemplates={classTemplates.map((c) => ({ id: c.id, label: c.label, dayOfWeek: c.dayOfWeek, startTime: c.startTime }))}
       statusCounts={{ actief: statusCounts.actief, pauze: statusCounts.pauze, inactief: statusCounts.inactief }}
       overduePatients={overduePatients}
       topAttenders={topAttenders}

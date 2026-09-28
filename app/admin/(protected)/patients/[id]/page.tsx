@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { startOfAmsterdamWeek, startOfAmsterdamMonth, getAmsterdamMonthKey } from "@/lib/currentClass";
 import { getLastNMonths } from "@/lib/monthGrid";
-import { isOverdue, daysSince } from "@/lib/attendance";
+import { attendanceClock, overdueText } from "@/lib/attendance";
 import AvatarSvg from "../../../../AvatarSvg";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AddPastCheckIn, RemoveCheckInButton } from "./ManualCheckIn";
+import { AddPastCheckIn, HistoryList } from "./ManualCheckIn";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
         include: { classSession: { include: { classTemplate: true } } },
         orderBy: { checkedInAt: "desc" },
       },
+      absences: { orderBy: { date: "desc" } },
     },
   });
 
@@ -30,8 +31,25 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
   });
 
   const lastCheckIn = patient.checkIns[0]?.checkedInAt ?? null;
-  const gap = lastCheckIn ? daysSince(lastCheckIn) : null;
-  const overdue = isOverdue(gap, patient.status);
+  const clock = attendanceClock({
+    status: patient.status,
+    createdAt: patient.createdAt,
+    lastCheckIn,
+    lastExcusedDate: patient.absences[0]?.date ?? null,
+    pauseUntil: patient.pauseUntil,
+  });
+  const overdue = clock.overdue;
+
+  // Check-ins and excused absences in one list, newest first.
+  const history = [
+    ...patient.checkIns.map((c) => ({
+      kind: "checkIn" as const,
+      id: c.id,
+      date: c.classSession.date,
+      label: c.classSession.classTemplate.label,
+    })),
+    ...patient.absences.map((a) => ({ kind: "absence" as const, id: a.id, date: a.date, label: a.reason })),
+  ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   const monthCounts = new Map<string, number>();
   for (const c of patient.checkIns) {
@@ -49,21 +67,19 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
       <div className="flex items-center gap-4">
         <AvatarSvg skinTone={patient.skinTone} hairStyle={patient.hairStyle} hairColor={patient.hairColor} seed={patient.id} size={72} />
         <div>
-          <h1 className="font-display text-3xl font-semibold text-ink">{patient.name}</h1>
+          <h1 className="font-display text-2xl md:text-3xl font-semibold text-ink">{patient.name}</h1>
           <p className="text-ink-muted">
             Ingeschreven voor {patient.classes.map((c) => c.classTemplate.label).join(", ") || "geen lessen"}
           </p>
         </div>
       </div>
 
-      {overdue && lastCheckIn && (
+      {overdue && (
         <div
           className="border-2 border-danger text-danger rounded-2xl px-4 py-3 font-semibold"
           style={{ backgroundColor: "rgba(179, 69, 47, 0.08)" }}
         >
-          Niet meer geweest sinds{" "}
-          {lastCheckIn.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })} ({gap} dagen
-          geleden)
+          {overdueText(clock)}
         </div>
       )}
 
@@ -88,7 +104,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
 
       <div>
         <h2 className="font-display text-xl font-semibold text-ink mb-3">Maandoverzicht</h2>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
           {months.map((m) => {
             const count = monthCounts.get(m.key) ?? 0;
             const attended = count > 0;
@@ -118,26 +134,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
           <h2 className="font-display text-xl font-semibold text-ink">Geschiedenis</h2>
           <AddPastCheckIn patientId={patient.id} classes={allClasses} />
         </div>
-        <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
-          {patient.checkIns.length === 0 ? (
-            <p className="p-6 text-ink-muted">Nog geen check-ins.</p>
-          ) : (
-            patient.checkIns.map((c) => (
-              <div key={c.id} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <p className="font-medium text-ink">{c.classSession.classTemplate.label}</p>
-                  <p className="text-sm text-ink-muted">{c.classSession.date}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xl" aria-label="Ingecheckt">
-                    ✅
-                  </span>
-                  <RemoveCheckInButton checkInId={c.id} patientId={patient.id} />
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        <HistoryList patientId={patient.id} items={history} />
       </div>
     </div>
   );

@@ -9,6 +9,8 @@ import {
   removePatientFromClass,
 } from "../../../actions/admin";
 import { DAY_NAMES_NL } from "@/lib/schedule";
+import { useRouter } from "next/navigation";
+import { useToast } from "../Toast";
 import AvatarSvg from "../../../AvatarSvg";
 import { PencilIcon, TrashIcon, Spinner, EmptyCalendarIcon } from "../../../Icons";
 
@@ -66,7 +68,10 @@ export default function ClassesManager({
   busiestStartTime: { time: string; total: number } | null;
   heatmap: HeatmapRow[];
 }) {
+  const router = useRouter();
+  const { showUndo } = useToast();
   const [classes, setClasses] = useState(initialClasses);
+  useEffect(() => setClasses(initialClasses), [initialClasses]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -117,21 +122,31 @@ export default function ClassesManager({
       }
       setShowForm(false);
       setForm(EMPTY_FORM);
-      window.location.reload();
+      router.refresh();
     });
   }
 
+  // No confirm() pop-up: the class disappears straight away and is only
+  // really deleted (with its history) after the undo toast runs out.
   function remove(id: string) {
-    if (
-      !confirm(
-        "Deze les verwijderen? Dit verwijdert ook alle inschrijvingen en de check-in geschiedenis voor deze les."
-      )
-    )
-      return;
-    startTransition(async () => {
-      await deleteClass(id);
-      setClasses((prev) => prev.filter((c) => c.id !== id));
-      if (openClassId === id) setOpenClassId(null);
+    const index = classes.findIndex((c) => c.id === id);
+    const removed = classes[index];
+    if (!removed) return;
+    setClasses((prev) => prev.filter((c) => c.id !== id));
+    if (openClassId === id) setOpenClassId(null);
+    showUndo({
+      message: `${removed.label} verwijderd`,
+      duration: 7000,
+      commit: async () => {
+        await deleteClass(id);
+        router.refresh();
+      },
+      onUndo: () =>
+        setClasses((prev) => {
+          const next = [...prev];
+          next.splice(index, 0, removed);
+          return next;
+        }),
     });
   }
 
@@ -171,9 +186,25 @@ export default function ClassesManager({
       setRoster((prev) => ({ ...prev, [classId]: (prev[classId] ?? []).filter((p) => p.id !== patientId) }));
       setRemovingId(null);
     }, 200);
+    const removed = (roster[classId] ?? []).find((p) => p.id === patientId);
     startRosterTransition(async () => {
       await removePatientFromClass(patientId, classId);
     });
+    if (removed) {
+      showUndo({
+        message: `${removed.name} uit de les gehaald`,
+        commit: () => {},
+        onUndo: () => {
+          setRoster((prev) => ({
+            ...prev,
+            [classId]: [...(prev[classId] ?? []), removed].sort((a, b) => a.name.localeCompare(b.name)),
+          }));
+          startRosterTransition(async () => {
+            await addPatientToClass(patientId, classId);
+          });
+        },
+      });
+    }
   }
 
   const maxEnrolled = Math.max(1, ...capacities.map((c) => c.enrolled));
@@ -183,12 +214,12 @@ export default function ClassesManager({
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display text-3xl font-semibold text-ink">Lessen</h1>
+            <h1 className="font-display text-2xl md:text-3xl font-semibold text-ink">Lessen</h1>
             <p className="text-ink-muted text-sm mt-0.5">Klik op een les om te zien wie er ingeschreven staat</p>
           </div>
           <button
             onClick={startNew}
-            className="bg-teal text-white rounded-xl px-4 py-2 font-semibold hover:bg-teal-dark"
+            className="bg-teal text-white rounded-xl px-4 py-2 font-semibold hover:bg-teal-dark whitespace-nowrap shrink-0"
           >
             + Nieuwe les
           </button>
@@ -453,7 +484,7 @@ export default function ClassesManager({
         }`}
       />
       <div
-        className={`fixed top-0 right-0 bottom-0 w-[420px] max-w-[92vw] bg-surface shadow-[-8px_0_32px_rgba(36,16,18,0.18)] z-50 flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 bottom-0 w-full sm:w-[420px] sm:max-w-[92vw] bg-surface shadow-[-8px_0_32px_rgba(36,16,18,0.18)] z-50 flex flex-col transition-transform duration-300 ease-out ${
           openClassId ? "translate-x-0" : "translate-x-full"
         }`}
       >

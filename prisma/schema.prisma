@@ -24,10 +24,16 @@ model Patient {
   // the kiosk if they show up, but excluded from the "hasn't been in a
   // while" alert since their absence is expected.
   status    String   @default("actief")
+  // Optional end date for "pauze". When it passes, the patient is switched
+  // back to "actief" automatically, and the "hasn't been in a while" clock
+  // starts counting from this date instead of from their last check-in.
+  // Kept after the pause ends so that clock keeps working.
+  pauseUntil DateTime?
   createdAt DateTime @default(now())
 
   classes  PatientClass[]
   checkIns CheckIn[]
+  absences Absence[]
 }
 
 // The fixed weekly schedule, e.g. "Monday 16:00-17:00"
@@ -79,4 +85,20 @@ model CheckIn {
   classSession ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
 
   @@unique([patientId, classSessionId])
+}
+
+// An excused absence on a specific day: the clinic knows why they weren't
+// there (ziek / vakantie / afgemeld). Excused days reset the "Aandacht
+// nodig" clock, so only unexplained absences end up on that list.
+model Absence {
+  id              String   @id @default(cuid())
+  patientId       String
+  date            String   // "YYYY-MM-DD", Amsterdam local
+  reason          String   // "ziek" | "vakantie" | "afgemeld"
+  classTemplateId String?
+  createdAt       DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, date])
 }

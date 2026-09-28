@@ -10,6 +10,7 @@ import {
   getWeeklyCheckInTrend,
 } from "@/lib/insights";
 import ThemeToggle from "./ThemeToggle";
+import TodayClasses from "./TodayClasses";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export default async function AdminDashboard() {
   const dateKey = getAmsterdamDateKey();
 
   const totalPatients = await prisma.patient.count({ where: { active: true } });
+  const monthStart = new Date(`${dateKey.slice(0, 7)}-01T00:00:00Z`);
+  const newThisMonth = await prisma.patient.count({ where: { createdAt: { gte: monthStart } } });
 
   const todaysClasses = await prisma.classTemplate.findMany({
     where: { dayOfWeek },
@@ -72,7 +75,6 @@ export default async function AdminDashboard() {
   const totalCheckedInToday = rows.reduce((sum, r) => sum + r.checkedIn, 0);
   const todayOccupancyPct =
     totalEnrolledToday > 0 ? Math.round((totalCheckedInToday / totalEnrolledToday) * 100) : null;
-  const longestOverdueDays = overduePatientsAll[0]?.days ?? null;
 
   const activeRow = current.active ? rows.find((r) => r.entry.id === current.active!.id) : undefined;
   const activeProgressPct = current.active
@@ -115,16 +117,16 @@ export default async function AdminDashboard() {
       <div className="flex flex-col gap-8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-semibold text-ink mb-1">Overzicht</h1>
-            <p className="text-ink-muted">
+            <h1 className="font-display text-2xl md:text-3xl font-semibold text-ink mb-1">Overzicht</h1>
+            <p className="text-ink-muted text-sm md:text-base">
               Vandaag is het {DAY_NAMES_NL[dayOfWeek]} · {totalPatients} actieve cliënten
             </p>
           </div>
           <ThemeToggle />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 print:hidden">
-          <div className="rounded-2xl p-5 text-white flex flex-col gap-3.5" style={{ background: "var(--teal)" }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 print:hidden">
+          <div className="col-span-2 sm:col-span-1 rounded-2xl p-4 md:p-5 text-white flex flex-col gap-3" style={{ background: "var(--teal)" }}>
             <p className="font-semibold text-sm">Vandaag</p>
             <p className="font-display text-2xl font-semibold">
               {totalCheckedInToday} / {totalEnrolledToday}
@@ -140,64 +142,64 @@ export default async function AdminDashboard() {
                 <span className="block text-xs font-semibold opacity-100">{rows.length}</span>
                 lessen vandaag
               </div>
+              <div>
+                <span className="block text-xs font-semibold opacity-100">
+                  {weeklyTrend.changePct === null
+                    ? "–"
+                    : `${weeklyTrend.changePct >= 0 ? "▲" : "▼"} ${Math.abs(weeklyTrend.changePct)}%`}
+                </span>
+                check-ins t.o.v. vorige week
+              </div>
             </div>
           </div>
 
-          <div className="rounded-2xl p-5 text-white flex flex-col gap-3.5" style={{ background: "#3fa671" }}>
+          <div className="rounded-2xl p-4 md:p-5 text-white flex flex-col gap-3" style={{ background: "#3fa671" }}>
             <p className="font-semibold text-sm">Actieve cliënten</p>
             <p className="font-display text-2xl font-semibold">{totalPatients}</p>
             <div className="flex gap-4 text-[11px] opacity-90">
               <div>
                 <span className="block text-xs font-semibold opacity-100">
-                  {weeklyTrend.changePct === null
-                    ? "–"
-                    : `${weeklyTrend.changePct > 0 ? "▲" : "▼"} ${Math.abs(weeklyTrend.changePct)}%`}
+                  {newThisMonth > 0 ? `+${newThisMonth}` : "0"}
                 </span>
-                t.o.v. vorige week
+                nieuw deze maand
+              </div>
+              <div>
+                <span className="block text-xs font-semibold opacity-100">{statusCounts.pauze}</span>
+                op pauze
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl p-5 flex flex-col gap-3.5" style={{ background: "var(--amber)", color: "#3a2900" }}>
+          <div className="rounded-2xl p-4 md:p-5 flex flex-col gap-3" style={{ background: "var(--amber)", color: "#3a2900" }}>
             <p className="font-semibold text-sm">Aandacht nodig</p>
             <p className="font-display text-2xl font-semibold">{overduePatientsAll.length}</p>
             <div className="flex gap-4 text-[11px] opacity-90">
               <div>
                 <span className="block text-xs font-semibold opacity-100">
-                  {longestOverdueDays !== null ? `${longestOverdueDays}+ dagen` : "–"}
+                  {overduePatientsAll.filter((p) => p.neverCame).length}
                 </span>
-                langste afwezigheid
+                nog nooit geweest
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
-          {rows.length === 0 ? (
-            <p className="p-6 text-ink-muted">Vandaag zijn er geen lessen.</p>
-          ) : (
-            rows.map((row) => (
-              <div key={row.entry.label} className="flex items-center justify-between px-6 py-4">
-                <div>
-                  <p className="font-semibold text-ink">
-                    {row.entry.startTime} - {row.entry.endTime}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-display text-xl font-semibold text-teal-dark">
-                    {row.checkedIn} / {row.enrolled}
-                  </p>
-                  <p className="text-xs text-ink-muted uppercase tracking-wide">ingecheckt</p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        <TodayClasses
+          today={dateKey}
+          rows={rows.map((r) => ({
+            id: r.entry.id,
+            label: r.entry.label,
+            startTime: r.entry.startTime,
+            endTime: r.entry.endTime,
+            checkedIn: r.checkedIn,
+            enrolled: r.enrolled,
+          }))}
+        />
 
         <div>
           <h2 className="font-display text-xl font-semibold text-ink mb-3">Aanwezigheid per maand</h2>
           <div className="bg-surface border border-border rounded-2xl p-5">
-            <div className="flex items-end gap-3" style={{ height: 140 }}>
+            <div className="flex items-end gap-2 md:gap-3" style={{ height: 140 }}>
               {chartData.map((m) => (
                 <div key={m.label} className="flex-1 flex flex-col items-center justify-end h-full">
                   <span className="text-xs font-semibold text-teal-dark mb-1">{m.count}</span>
@@ -208,7 +210,7 @@ export default async function AdminDashboard() {
                 </div>
               ))}
             </div>
-            <div className="flex gap-3 mt-2">
+            <div className="flex gap-2 md:gap-3 mt-2">
               {chartData.map((m) => (
                 <div key={m.label} className="flex-1 text-center text-xs text-ink-muted font-medium capitalize">
                   {m.label.split(" ")[0]}
@@ -275,7 +277,7 @@ export default async function AdminDashboard() {
                   ? "–"
                   : `${weeklyTrend.changePct > 0 ? "▲" : "▼"} ${Math.abs(weeklyTrend.changePct)}%`}
               </p>
-              <p className="text-[11px] text-ink-muted mt-1">t.o.v. vorige week</p>
+              <p className="text-[11px] text-ink-muted mt-1">check-ins t.o.v. vorige week</p>
             </div>
           </div>
         </div>
@@ -283,7 +285,7 @@ export default async function AdminDashboard() {
         {/* Aandacht nodig */}
         <div className="bg-surface border border-border rounded-2xl p-5">
           <h3 className="font-semibold text-ink text-sm mb-1">Aandacht nodig</h3>
-          <p className="text-xs text-ink-muted mb-3">Actief, maar lang niet geweest</p>
+          <p className="text-xs text-ink-muted mb-3">Lang niet gezien, of nog nooit geweest</p>
           {overduePatients.length === 0 ? (
             <p className="text-sm" style={{ color: "#1f6d3f" }}>
               Niemand is momenteel te lang weggebleven.
@@ -291,12 +293,16 @@ export default async function AdminDashboard() {
           ) : (
             <div className="flex flex-col divide-y divide-border">
               {overduePatients.map((p) => (
-                <div key={p.id} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                <a
+                  key={p.id}
+                  href={`/admin/patients/${p.id}`}
+                  className="flex items-center justify-between py-2 first:pt-0 last:pb-0 hover:text-teal-dark"
+                >
                   <span className="font-semibold text-sm text-ink">{p.name}</span>
                   <span className="text-xs font-medium" style={{ color: "#8f1620" }}>
-                    {p.days} dagen
+                    {p.neverCame ? "nooit geweest" : `${p.days} dagen`}
                   </span>
-                </div>
+                </a>
               ))}
             </div>
           )}

@@ -57,6 +57,8 @@ export async function checkInPatient(patientId: string) {
       classSessionId: session.id,
     },
   });
+  // They came after all — drop any "afgemeld" for today.
+  await prisma.absence.deleteMany({ where: { patientId, date: dateKey } });
 
   revalidatePath("/");
   return { ok: true };
@@ -133,6 +135,8 @@ export async function checkInDropIn(patientId: string) {
       classSessionId: session.id,
     },
   });
+  // They came after all — drop any "afgemeld" for today.
+  await prisma.absence.deleteMany({ where: { patientId, date: dateKey } });
 
   revalidatePath("/");
   return { ok: true };

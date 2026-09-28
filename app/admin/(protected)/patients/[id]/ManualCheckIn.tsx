@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addManualCheckIn, removeCheckIn } from "../../../../actions/admin";
+import { useRouter } from "next/navigation";
+import { addManualCheckIn, removeCheckIn, setAbsence } from "../../../../actions/admin";
+import { absenceLabel } from "@/lib/attendance";
+import { TrashIcon } from "../../../../Icons";
+import { useToast } from "../../Toast";
 
 type ClassOption = { id: string; label: string };
 
@@ -12,6 +16,7 @@ export function AddPastCheckIn({
   patientId: string;
   classes: ClassOption[];
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [classTemplateId, setClassTemplateId] = useState(classes[0]?.id ?? "");
   const [dates, setDates] = useState<string[]>([""]);
@@ -50,7 +55,7 @@ export function AddPastCheckIn({
       }
       setOpen(false);
       setDates([""]);
-      window.location.reload();
+      router.refresh();
     });
   }
 
@@ -141,24 +146,73 @@ export function AddPastCheckIn({
   );
 }
 
-export function RemoveCheckInButton({ checkInId, patientId }: { checkInId: string; patientId: string }) {
-  const [isPending, startTransition] = useTransition();
+type HistoryItem = { kind: "checkIn" | "absence"; id: string; date: string; label: string };
 
-  function remove() {
-    if (!confirm("Deze check-in verwijderen?")) return;
-    startTransition(async () => {
-      await removeCheckIn(checkInId, patientId);
-      window.location.reload();
+// History rows with undo-toast removal instead of a confirm() pop-up.
+export function HistoryList({ patientId, items }: { patientId: string; items: HistoryItem[] }) {
+  const router = useRouter();
+  const { showUndo } = useToast();
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const visible = items.filter((i) => !hidden.has(i.id));
+
+  function remove(item: HistoryItem) {
+    setHidden((prev) => new Set(prev).add(item.id));
+    showUndo({
+      message: item.kind === "checkIn" ? "Check-in verwijderd" : "Afmelding verwijderd",
+      commit: async () => {
+        if (item.kind === "checkIn") await removeCheckIn(item.id, patientId);
+        else await setAbsence(patientId, item.date, null);
+        router.refresh();
+      },
+      onUndo: () =>
+        setHidden((prev) => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        }),
     });
   }
 
   return (
-    <button
-      onClick={remove}
-      disabled={isPending}
-      className="text-ink-muted hover:text-danger font-medium text-sm disabled:opacity-60"
-    >
-      Verwijderen
-    </button>
+    <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
+      {visible.length === 0 ? (
+        <p className="p-6 text-ink-muted">Nog geen check-ins.</p>
+      ) : (
+        visible.map((item) => (
+          <div key={item.id} className="flex items-center justify-between px-4 sm:px-5 py-3 gap-3">
+            <div className="min-w-0">
+              <p className={`font-medium truncate ${item.kind === "absence" ? "text-ink-muted" : "text-ink"}`}>
+                {item.kind === "checkIn" ? item.label : `Afgemeld · ${absenceLabel(item.label)}`}
+              </p>
+              <p className="text-sm text-ink-muted">
+                {new Date(`${item.date}T12:00:00Z`).toLocaleDateString("nl-NL", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                  timeZone: "UTC",
+                })}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {item.kind === "checkIn" ? (
+                <span className="w-7 h-7 rounded-full bg-teal text-white flex items-center justify-center text-sm" aria-label="Aanwezig">✓</span>
+              ) : (
+                <span className="w-7 h-7 rounded-full cal-absent flex items-center justify-center text-xs font-bold">
+                  {absenceLabel(item.label).charAt(0)}
+                </span>
+              )}
+              <button
+                onClick={() => remove(item)}
+                aria-label="Verwijderen"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-muted hover:text-danger hover:bg-[var(--tint)]"
+              >
+                <TrashIcon />
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
   );
 }
